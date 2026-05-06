@@ -22,7 +22,7 @@ Ziel: Andreas kann Wissenslücken sehen, Artikel-Entwürfe generieren lassen, re
 │  • Anfragen beantworten     │◄───────│  Trigger:                     │
 │  • Gap-Logging (neu)        │        │  • Gap-Queue (aus Bot-Logs)   │
 │  • POST /api/articles (neu) │        │  • Manuell ("schreib über X") │
-│  • /admin/reindex           │        │  • Release-Notes (paste, v2)  │
+│  • /admin/reindex           │        │  • Release-Notes (paste)       │
 └─────────────────────────────┘        │                               │
                                        │  • KI-Writer (Gemini)         │
                                        │  • Review-Queue               │
@@ -101,10 +101,10 @@ article_drafts (
 - Formular: Thema (Pflicht) + optionaler Kontext/Notizen.
 - `[Artikel generieren]` startet Writer direkt.
 
-**3. Release-Notes (v2)**
+**3. Release-Notes**
 - Paste-Feld für Release-Text aus Rocket.Chat oder Confluence.
-- Writer leitet daraus Artikel-Entwürfe ab.
-- In v1 nicht implementiert.
+- Writer analysiert den Text und leitet daraus einen oder mehrere Artikel-Entwürfe ab.
+- Entwürfe landen direkt in der Review-Queue.
 
 **4. Review-Queue**
 - Liste aller Entwürfe mit Status `draft`.
@@ -138,7 +138,7 @@ Freigabe-Klick
 ## Was explizit nicht in v1 ist
 
 - Automatischer Relevanz-Filter für Gap-Fragen (zu viel Token-Verbrauch für wenig Gewinn)
-- Release-Notes-Integration (Rocket.Chat / Confluence) — kommt in v2
+- Automatische Rocket.Chat / Confluence-Integration — Release-Notes werden manuell reinkopiert
 - Auth auf `/api/articles` — internes Netz reicht vorerst
 - Automatisches Publizieren ins echte Helpcenter (kein CMS-API vorhanden)
 
