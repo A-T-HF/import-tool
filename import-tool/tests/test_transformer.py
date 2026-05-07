@@ -1,4 +1,4 @@
-from transformer import get_fields, ENTITY_TYPES
+from transformer import get_fields, ENTITY_TYPES, validate_field
 from transformer import (
     transform_date, transform_country, transform_gender,
     transform_title, transform_reservation_status
@@ -98,3 +98,50 @@ def test_status_cancelled_guest():
 
 def test_status_unknown():
     assert transform_reservation_status("unbekannt") is None
+
+def test_validate_email_valid():
+    assert validate_field("email", "test@example.com") is None
+
+def test_validate_email_invalid():
+    assert validate_field("email", "kein email") is not None
+
+def test_validate_email_empty_required():
+    assert validate_field("email", "") is not None
+
+def test_validate_language_valid():
+    assert validate_field("language", "de") is None
+    assert validate_field("language", "en") is None
+
+def test_validate_language_too_long():
+    assert validate_field("language", "deu") is not None
+
+def test_validate_is_child_valid():
+    assert validate_field("is_child", "0") is None
+    assert validate_field("is_child", "1") is None
+
+def test_validate_is_child_invalid():
+    assert validate_field("is_child", "ja") is not None
+
+def test_validate_company_code_valid():
+    assert validate_field("company_code", "1234") is None
+    assert validate_field("company_code", "1234567890") is None
+
+def test_validate_company_code_too_short():
+    assert validate_field("company_code", "123") is not None
+
+def test_validate_company_code_too_long():
+    assert validate_field("company_code", "12345678901") is not None
+
+def test_validate_company_type_valid():
+    assert validate_field("company_type", "Company") is None
+    assert validate_field("company_type", "Agency") is None
+
+def test_validate_company_type_invalid():
+    assert validate_field("company_type", "GmbH") is not None
+
+def test_validate_discount_type_valid():
+    for v in ["Percentage", "Fixed discount", "Price for room type"]:
+        assert validate_field("discount_type", v) is None
+
+def test_validate_discount_type_invalid():
+    assert validate_field("discount_type", "Rabatt") is not None

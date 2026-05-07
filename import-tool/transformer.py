@@ -163,3 +163,21 @@ def transform_reservation_status(value: str) -> str | None:
     if not value or not value.strip():
         return None
     return _STATUS_MAP.get(value.strip().lower())
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+_VALIDATORS = {
+    "email": lambda v: None if _EMAIL_RE.match(v or "") else "Ungültiges E-Mail-Format",
+    "language": lambda v: None if (v and len(v.strip()) <= 2 and v.strip().isalpha()) else "Muss ISO 639-1 sein (max 2 Zeichen)",
+    "is_child": lambda v: None if v in ("0", "1") else "Muss 0 oder 1 sein",
+    "company_code": lambda v: None if (v and v.strip().isdigit() and 4 <= len(v.strip()) <= 10) else "Muss Zahl mit 4–10 Stellen sein",
+    "company_type": lambda v: None if v in ("Company", "Agency") else "Muss 'Company' oder 'Agency' sein",
+    "discount_type": lambda v: None if v in ("Percentage", "Fixed discount", "Price for room type") else "Muss 'Percentage', 'Fixed discount' oder 'Price for room type' sein",
+}
+
+def validate_field(validator_name: str, value: str) -> str | None:
+    """Returns error message or None if valid."""
+    fn = _VALIDATORS.get(validator_name)
+    if fn is None:
+        return None
+    return fn(value)
