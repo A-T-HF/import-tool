@@ -215,3 +215,25 @@ def test_transform_ignored_columns_excluded():
     result = transform(rows, "guest", mapping)
     assert "Intern" not in result.valid_rows[0]
     assert "_ignore" not in result.valid_rows[0]
+
+from transformer import suggest_mapping
+
+def test_suggest_mapping_german_first_name():
+    suggestions = suggest_mapping(["Vorname", "Nachname", "E-Mail"], "guest")
+    assert suggestions["Vorname"]["field"] == "first_name"
+    assert suggestions["Nachname"]["field"] == "last_name"
+
+def test_suggest_mapping_english_columns():
+    suggestions = suggest_mapping(["First Name", "Last Name", "Email"], "guest")
+    assert suggestions["First Name"]["field"] == "first_name"
+    assert suggestions["Email"]["field"] == "email"
+
+def test_suggest_mapping_arrival():
+    suggestions = suggest_mapping(["Arrival", "Departure"], "reservation")
+    assert suggestions["Arrival"]["field"] == "Check In"
+    assert suggestions["Departure"]["field"] == "Check Out"
+
+def test_suggest_mapping_has_score():
+    suggestions = suggest_mapping(["Vorname"], "guest")
+    assert "score" in suggestions["Vorname"]
+    assert 0 <= suggestions["Vorname"]["score"] <= 100

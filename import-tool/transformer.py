@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any
+from rapidfuzz import process, fuzz
 
 ENTITY_TYPES = ["guest", "company", "reservation"]
 
@@ -256,5 +257,55 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
             })
         else:
             result.valid_rows.append(mapped)
+
+    return result
+
+# Aliases für fuzzy matching: alternative Namen für Zielfelder
+_FIELD_ALIASES: dict[str, list[str]] = {
+    "first_name":   ["Vorname", "First Name", "firstname", "Given Name", "Name"],
+    "last_name":    ["Nachname", "Last Name", "lastname", "Surname", "Family Name"],
+    "email":        ["E-Mail", "Email", "Mail", "E-Mail-Adresse"],
+    "date_of_birth":["Geburtsdatum", "Date of Birth", "DOB", "Geburtstag"],
+    "country":      ["Land", "Country", "Herkunft"],
+    "nationality":  ["Nationalität", "Nationality"],
+    "phone":        ["Telefon", "Phone", "Tel", "Mobilnummer"],
+    "gender":       ["Geschlecht", "Gender"],
+    "title":        ["Titel", "Title", "Anrede"],
+    "language":     ["Sprache", "Language"],
+    "Check In":     ["Arrival", "Ankunft", "Check-in", "Anreise", "Von"],
+    "Check Out":    ["Departure", "Abreise", "Check-out", "Abreise", "Bis"],
+    "Zimmer":       ["Room", "Zimmer", "Zimmer-Nr", "Room Number"],
+    "Zimmertyp":    ["Room Type", "Zimmertyp", "Kategorie"],
+    "Summe":        ["Total", "Betrag", "Preis", "Sum", "Amount"],
+    "Status":       ["Status", "Buchungsstatus", "Booking Status"],
+    "name":         ["Firma", "Company Name", "Firmenname", "Name"],
+    "code":         ["ID", "Kunden-ID", "Code"],
+}
+
+def suggest_mapping(source_columns: list[str], entity_type: str) -> dict[str, dict]:
+    """
+    Returns {source_col: {"field": best_target_field, "score": int}}
+    Score 0-100. Score < 60 means low confidence.
+    """
+    target_fields = [f["name"] for f in get_fields(entity_type)]
+
+    # Build lookup: alias (lowercase) → field name
+    alias_to_field: dict[str, str] = {}
+    for field_name in target_fields:
+        alias_to_field[field_name.lower()] = field_name
+        for alias in _FIELD_ALIASES.get(field_name, []):
+            alias_to_field[alias.lower()] = field_name
+
+    candidates = list(alias_to_field.keys())
+    result = {}
+
+    for src_col in source_columns:
+        match, score, _ = process.extractOne(
+            src_col.lower(), candidates, scorer=fuzz.token_sort_ratio
+        )
+        result[src_col] = {
+            "field": alias_to_field[match],
+            "score": int(score),
+        }
 
     return result
