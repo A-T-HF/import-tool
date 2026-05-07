@@ -59,3 +59,107 @@ _SCHEMAS = {
 
 def get_fields(entity_type: str) -> list[dict]:
     return _SCHEMAS[entity_type]
+
+from datetime import datetime
+import re
+
+# --- Datum ---
+_DATE_FORMATS = [
+    "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",
+    "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
+    "%d.%m.%y", "%m/%d/%y",
+]
+
+def transform_date(value: str) -> str | None:
+    if not value or not value.strip():
+        return None
+    v = value.strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(v, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+# --- Ländercode ---
+_COUNTRY_MAP = {
+    # Deutsch
+    "deutschland": "DE", "österreich": "AT", "schweiz": "CH",
+    "frankreich": "FR", "spanien": "ES", "italien": "IT",
+    "niederlande": "NL", "belgien": "BE", "polen": "PL",
+    "tschechien": "CZ", "tschechische republik": "CZ",
+    "ungarn": "HU", "russland": "RU", "türkei": "TR",
+    "griechenland": "GR", "portugal": "PT", "schweden": "SE",
+    "norwegen": "NO", "dänemark": "DK", "finnland": "FI",
+    "großbritannien": "GB", "vereinigtes königreich": "GB",
+    "usa": "US", "vereinigte staaten": "US", "vereinigte staaten von amerika": "US",
+    "china": "CN", "japan": "JP", "australien": "AU", "kanada": "CA",
+    "rumänien": "RO", "bulgarien": "BG", "kroatien": "HR",
+    "slowakei": "SK", "slowenien": "SI", "serbien": "RS",
+    "luxemburg": "LU", "irland": "IE", "ukraine": "UA",
+    # Englisch
+    "germany": "DE", "austria": "AT", "switzerland": "CH",
+    "france": "FR", "spain": "ES", "italy": "IT",
+    "netherlands": "NL", "belgium": "BE", "poland": "PL",
+    "czech republic": "CZ", "hungary": "HU", "russia": "RU",
+    "turkey": "TR", "greece": "GR", "sweden": "SE",
+    "norway": "NO", "denmark": "DK", "finland": "FI",
+    "united kingdom": "GB", "great britain": "GB",
+    "united states": "US", "united states of america": "US",
+    "australia": "AU", "canada": "CA", "romania": "RO",
+    "bulgaria": "BG", "croatia": "HR", "slovakia": "SK",
+    "slovenia": "SI", "serbia": "RS", "luxembourg": "LU",
+    "ireland": "IE", "ukraine": "UA",
+}
+_VALID_ISO2 = re.compile(r"^[A-Z]{2}$")
+
+def transform_country(value: str) -> str | None:
+    if not value or not value.strip():
+        return None
+    v = value.strip()
+    upper = v.upper()
+    if _VALID_ISO2.match(upper):
+        return upper
+    return _COUNTRY_MAP.get(v.lower())
+
+# --- Gender ---
+_GENDER_MAP = {
+    "1": "1", "m": "1", "male": "1", "männlich": "1", "mann": "1",
+    "2": "2", "f": "2", "female": "2", "weiblich": "2", "frau": "2",
+    "3": "3", "other": "3", "divers": "3", "x": "3",
+}
+
+def transform_gender(value: str) -> str | None:
+    if not value or not value.strip():
+        return None
+    return _GENDER_MAP.get(value.strip().lower())
+
+# --- Title ---
+_TITLE_MAP = {
+    "mr": "mr", "mr.": "mr", "herr": "mr",
+    "mrs": "mrs", "mrs.": "mrs", "ms": "mrs", "ms.": "mrs", "frau": "mrs",
+    "miss": "miss", "frl": "miss", "frl.": "miss",
+}
+
+def transform_title(value: str) -> str | None:
+    if not value or not value.strip():
+        return None
+    return _TITLE_MAP.get(value.strip().lower())
+
+# --- Reservierungsstatus ---
+_STATUS_MAP = {
+    "neu": "new", "new": "new",
+    "bestätigt": "confirmed", "confirmed": "confirmed",
+    "eingecheckt": "check_in", "check_in": "check_in",
+    "ausgecheckt": "check_out", "check_out": "check_out",
+    "storniert (gast)": "cancelled_by_guest", "cancelled_by_guest": "cancelled_by_guest",
+    "storniert (hotel)": "cancelled_by_hf", "cancelled_by_hf": "cancelled_by_hf",
+    "no show": "no_show", "no_show": "no_show",
+    "due_in": "due_in", "due_out": "due_out",
+    "booking_offer": "booking_offer",
+}
+
+def transform_reservation_status(value: str) -> str | None:
+    if not value or not value.strip():
+        return None
+    return _STATUS_MAP.get(value.strip().lower())
