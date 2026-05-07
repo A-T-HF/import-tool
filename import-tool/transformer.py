@@ -181,3 +181,80 @@ def validate_field(validator_name: str, value: str) -> str | None:
     if fn is None:
         return None
     return fn(value)
+
+_TRANSFORMERS = {
+    "date":                 transform_date,
+    "country":              transform_country,
+    "gender":               transform_gender,
+    "title":                transform_title,
+    "reservation_status":   transform_reservation_status,
+}
+
+@dataclass
+class TransformResult:
+    valid_rows: list[dict[str, Any]] = field(default_factory=list)
+    error_rows: list[dict[str, Any]] = field(default_factory=list)
+
+
+def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> TransformResult:
+    """
+    rows:        list of dicts with source column names as keys
+    entity_type: "guest" | "company" | "reservation"
+    mapping:     {source_col: target_field} — target "_ignore" or "" means skip column
+    """
+    fields_schema = {f["name"]: f for f in get_fields(entity_type)}
+    result = TransformResult()
+    seen_emails = set()
+
+    for row_index, raw_row in enumerate(rows):
+        mapped = {}
+        errors = []
+
+        # Apply mapping + transformations
+        for src_col, target_field in mapping.items():
+            if target_field == "_ignore" or target_field == "":
+                continue
+            raw_value = str(raw_row.get(src_col, "") or "").strip()
+            schema = fields_schema.get(target_field, {})
+            transformer_name = schema.get("transformer")
+            if transformer_name:
+                transformed = _TRANSFORMERS[transformer_name](raw_value)
+                if transformed is None and raw_value:
+                    errors.append({"field": target_field, "reason": f"Wert '{raw_value}' konnte nicht konvertiert werden"})
+                    mapped[target_field] = raw_value  # keep original for inline correction
+                else:
+                    mapped[target_field] = transformed or ""
+            else:
+                mapped[target_field] = raw_value
+
+        # Check required fields
+        for fname, fschema in fields_schema.items():
+            if fschema["required"] and not mapped.get(fname):
+                errors.append({"field": fname, "reason": "Pflichtfeld fehlt"})
+
+        # Run validators
+        for fname, fschema in fields_schema.items():
+            validator_name = fschema.get("validator")
+            if validator_name and mapped.get(fname):
+                err = validate_field(validator_name, mapped[fname])
+                if err:
+                    errors.append({"field": fname, "reason": err})
+
+        # Duplicate email check (guests only)
+        if entity_type == "guest":
+            email = mapped.get("email", "")
+            if email and email in seen_emails:
+                errors.append({"field": "email", "reason": "Duplikat-E-Mail — wird übersprungen"})
+            elif email:
+                seen_emails.add(email)
+
+        if errors:
+            result.error_rows.append({
+                "row_index": row_index,
+                "row_data": mapped,
+                "errors": errors,
+            })
+        else:
+            result.valid_rows.append(mapped)
+
+    return result

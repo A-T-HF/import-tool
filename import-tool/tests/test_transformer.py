@@ -3,6 +3,7 @@ from transformer import (
     transform_date, transform_country, transform_gender,
     transform_title, transform_reservation_status
 )
+from transformer import transform, TransformResult
 
 def test_guest_required_fields():
     fields = get_fields("guest")
@@ -145,3 +146,72 @@ def test_validate_discount_type_valid():
 
 def test_validate_discount_type_invalid():
     assert validate_field("discount_type", "Rabatt") is not None
+
+def _guest_mapping():
+    return {
+        "Vorname": "first_name",
+        "Nachname": "last_name",
+        "E-Mail": "email",
+    }
+
+def test_transform_valid_guest_row():
+    rows = [{"Vorname": "Max", "Nachname": "Müller", "E-Mail": "max@example.com"}]
+    result = transform(rows, "guest", _guest_mapping())
+    assert isinstance(result, TransformResult)
+    assert len(result.valid_rows) == 1
+    assert len(result.error_rows) == 0
+    assert result.valid_rows[0]["email"] == "max@example.com"
+    assert result.valid_rows[0]["first_name"] == "Max"
+
+def test_transform_missing_required_field():
+    rows = [{"Vorname": "Max", "Nachname": "Müller", "E-Mail": ""}]
+    result = transform(rows, "guest", _guest_mapping())
+    assert len(result.valid_rows) == 0
+    assert len(result.error_rows) == 1
+    error = result.error_rows[0]
+    assert error["row_index"] == 0
+    assert any(e["field"] == "email" for e in error["errors"])
+
+def test_transform_date_auto_converted():
+    rows = [{
+        "Vorname": "Max", "Nachname": "Müller", "E-Mail": "max@example.com",
+        "Geburt": "19.12.1992"
+    }]
+    mapping = {**_guest_mapping(), "Geburt": "date_of_birth"}
+    result = transform(rows, "guest", mapping)
+    assert result.valid_rows[0]["date_of_birth"] == "1992-12-19"
+
+def test_transform_country_auto_converted():
+    rows = [{
+        "Vorname": "Max", "Nachname": "Müller", "E-Mail": "max@example.com",
+        "Land": "Deutschland"
+    }]
+    mapping = {**_guest_mapping(), "Land": "country"}
+    result = transform(rows, "guest", mapping)
+    assert result.valid_rows[0]["country"] == "DE"
+
+def test_transform_unknown_country_is_error():
+    rows = [{
+        "Vorname": "Max", "Nachname": "Müller", "E-Mail": "max@example.com",
+        "Land": "Unbekanntes Land"
+    }]
+    mapping = {**_guest_mapping(), "Land": "country"}
+    result = transform(rows, "guest", mapping)
+    assert len(result.error_rows) == 1
+
+def test_transform_duplicate_emails_guest():
+    rows = [
+        {"Vorname": "Max", "Nachname": "Müller", "E-Mail": "same@example.com"},
+        {"Vorname": "Anna", "Nachname": "Meier", "E-Mail": "same@example.com"},
+    ]
+    result = transform(rows, "guest", _guest_mapping())
+    assert len(result.valid_rows) == 1
+    assert len(result.error_rows) == 1
+    assert result.error_rows[0]["row_index"] == 1
+
+def test_transform_ignored_columns_excluded():
+    rows = [{"Vorname": "Max", "Nachname": "Müller", "E-Mail": "max@example.com", "Intern": "ignore"}]
+    mapping = {**_guest_mapping(), "Intern": "_ignore"}
+    result = transform(rows, "guest", mapping)
+    assert "Intern" not in result.valid_rows[0]
+    assert "_ignore" not in result.valid_rows[0]
