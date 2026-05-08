@@ -7,7 +7,7 @@ ENTITY_TYPES = ["guest", "company", "reservation"]
 _GUEST_FIELDS = [
     {"name": "first_name",    "required": True,  "transformer": None,        "validator": None},
     {"name": "last_name",     "required": True,  "transformer": None,        "validator": None},
-    {"name": "email",         "required": True,  "transformer": None,        "validator": "email"},
+    {"name": "email",         "required": False, "transformer": None,        "validator": "email"},
     {"name": "phone",         "required": False, "transformer": None,        "validator": None},
     {"name": "country",       "required": False, "transformer": "country",   "validator": None},
     {"name": "city",          "required": False, "transformer": None,        "validator": None},
@@ -43,7 +43,7 @@ _COMPANY_FIELDS = [
 _RESERVATION_FIELDS = [
     {"name": "first_name", "required": True,  "transformer": None,   "validator": None},
     {"name": "last_name",  "required": True,  "transformer": None,   "validator": None},
-    {"name": "email",      "required": True,  "transformer": None,   "validator": "email"},
+    {"name": "email",      "required": False, "transformer": None,   "validator": "email"},
     {"name": "Check In",   "required": True,  "transformer": "date", "validator": None},
     {"name": "Check Out",  "required": True,  "transformer": "date", "validator": None},
     {"name": "Zimmer",     "required": True,  "transformer": None,   "validator": None},

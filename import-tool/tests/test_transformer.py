@@ -8,7 +8,7 @@ from transformer import transform, TransformResult
 def test_guest_required_fields():
     fields = get_fields("guest")
     required = [f["name"] for f in fields if f["required"]]
-    assert set(required) == {"first_name", "last_name", "email"}
+    assert set(required) == {"first_name", "last_name"}
 
 def test_company_required_fields():
     fields = get_fields("company")
@@ -18,7 +18,7 @@ def test_company_required_fields():
 def test_reservation_required_fields():
     fields = get_fields("reservation")
     required = [f["name"] for f in fields if f["required"]]
-    assert set(required) == {"first_name", "last_name", "email", "Check In", "Check Out", "Zimmer", "Zimmertyp"}
+    assert set(required) == {"first_name", "last_name", "Check In", "Check Out", "Zimmer", "Zimmertyp"}
 
 def test_entity_types_known():
     assert set(ENTITY_TYPES) == {"guest", "company", "reservation"}
@@ -164,13 +164,13 @@ def test_transform_valid_guest_row():
     assert result.valid_rows[0]["first_name"] == "Max"
 
 def test_transform_missing_required_field():
-    rows = [{"Vorname": "Max", "Nachname": "Müller", "E-Mail": ""}]
+    rows = [{"Vorname": "", "Nachname": "Müller", "E-Mail": ""}]
     result = transform(rows, "guest", _guest_mapping())
     assert len(result.valid_rows) == 0
     assert len(result.error_rows) == 1
     error = result.error_rows[0]
     assert error["row_index"] == 0
-    assert any(e["field"] == "email" for e in error["errors"])
+    assert any(e["field"] == "first_name" for e in error["errors"])
 
 def test_transform_date_auto_converted():
     rows = [{
