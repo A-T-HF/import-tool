@@ -4,5 +4,6 @@ __pycache__/
 *.egg-info/
 .env
 venv/
-firebird/  # Firebird 5 arm64 embedded — zu groß für Git (52 MB), lokal einrichten
+# Firebird 5 arm64 embedded — zu groß für Git (52 MB), lokal einrichten
+firebird/
 
