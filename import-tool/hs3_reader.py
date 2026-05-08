@@ -159,7 +159,7 @@ def read_guests(con) -> list[dict]:
                COUNTRY, CITY, STREET, ZIPCODE,
                BIRTHDAY, GENDER, NATIONALITY, LANGUAGE
         FROM BAS_CUSTOMERS
-        WHERE ID > 0
+        WHERE ID > 0 AND CUSTTYPE = 1
     """)
     cols = [d[0] for d in cur.description]
     rows = []
@@ -169,9 +169,6 @@ def read_guests(con) -> list[dict]:
         if not r.get("NAME1"):
             continue
         title_raw = (r.get("SALUTATION") or "").strip().lower()
-        # Detect if this is a company entry by salutation
-        if title_raw in ("firma", "company"):
-            continue
         rows.append({
             "last_name":    (r.get("NAME1") or "").strip(),
             "first_name":   (r.get("NAME2") or "").strip(),
