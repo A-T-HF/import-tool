@@ -4,11 +4,384 @@
   <meta charset="UTF-8">
   <title>HotelFriend Import Tool</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .field-required { color: #dc3545; font-weight: 600; }
+    .drop-zone {
+      border: 2px dashed #6c757d; border-radius: 8px;
+      padding: 40px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .drop-zone.dragover { border-color: #0d6efd; background: #f0f4ff; }
+    .drop-zone input[type=file] { display: none; }
+  </style>
 </head>
 <body class="bg-light">
-  <div class="container py-5">
-    <h1 class="mb-4">HotelFriend Import Tool</h1>
-    <p>Placeholder</p>
+<div class="container py-5" style="max-width: 900px;">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center mb-4 gap-3">
+    <h1 class="h3 mb-0">HotelFriend Import Tool</h1>
+    <span id="stepBadge" class="badge bg-secondary">Schritt 1 von 4</span>
   </div>
+
+  <!-- Screen 1: Upload -->
+  <div id="screen1" class="screen active card shadow-sm p-4">
+    <h2 class="h5 mb-3">Datei hochladen</h2>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Entitätstyp</label>
+      <select id="entityType" class="form-select">
+        <option value="guest">Gäste</option>
+        <option value="company">Firmen / Gruppen</option>
+        <option value="reservation">Reservierungen</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <div class="drop-zone" id="dropZone">
+        <p class="mb-1 text-muted">CSV, XLS oder XLSX hierher ziehen</p>
+        <p class="mb-2 text-muted small">oder</p>
+        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('fileInput').click()">
+          Datei auswählen
+        </button>
+        <input type="file" id="fileInput" accept=".csv,.xls,.xlsx">
+        <p id="fileName" class="mt-2 mb-0 text-muted small"></p>
+      </div>
+    </div>
+    <div id="uploadError" class="alert alert-danger d-none"></div>
+    <button id="btnUpload" class="btn btn-primary" disabled>Weiter →</button>
+  </div>
+
+  <!-- Screen 2: Column Mapping -->
+  <div id="screen2" class="screen card shadow-sm p-4">
+    <h2 class="h5 mb-1">Spalten zuordnen</h2>
+    <p class="text-muted small mb-3">Ordne jede Quellspalte einem HotelFriend-Feld zu. Pflichtfelder sind rot markiert.</p>
+    <div id="mappingWarning" class="alert alert-warning d-none">
+      Nicht alle Pflichtfelder sind zugeordnet.
+    </div>
+    <table class="table table-bordered table-sm">
+      <thead class="table-light">
+        <tr><th>Quellspalte</th><th>→ HotelFriend Feld</th><th>Vorschau (erste Zeile)</th></tr>
+      </thead>
+      <tbody id="mappingTable"></tbody>
+    </table>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary" onclick="showScreen(1)">← Zurück</button>
+      <button id="btnValidate" class="btn btn-primary">Prüfen & Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Screen 3a: Error Correction -->
+  <div id="screen3a" class="screen card shadow-sm p-4">
+    <h2 class="h5 mb-1">Fehler prüfen & korrigieren</h2>
+    <div id="validationSummary" class="alert alert-info mb-3"></div>
+    <div id="errorTable"></div>
+    <div class="d-flex gap-2 mt-3">
+      <button class="btn btn-outline-secondary" onclick="showScreen(2)">← Zurück</button>
+      <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
+      <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
+    </div>
+  </div>
+
+  <!-- Screen 3b: Download -->
+  <div id="screen3b" class="screen card shadow-sm p-4">
+    <h2 class="h5 mb-1">Download</h2>
+    <div id="downloadSummary" class="alert alert-success mb-3"></div>
+    <div class="d-flex gap-2">
+      <button id="btnDoDownload" class="btn btn-success btn-lg">CSV herunterladen ↓</button>
+      <button class="btn btn-outline-secondary" onclick="showScreen('3a')">← Zurück</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const S = {
+  entityType: "guest",
+  allRows: [],
+  columns: [],
+  preview: [],
+  targetFields: [],
+  mapping: {},        // {srcCol: targetField}
+  validRows: [],
+  errorRows: [],      // [{row_index, row_data, errors}]
+  corrections: {},    // {row_index: {field: value}}
+  skipped: new Set(),
+  _skippedRows: [],
+};
+
+// ── Screen navigation ──────────────────────────────────────────────
+function showScreen(n) {
+  document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
+  const id = n === "3a" ? "screen3a" : n === "3b" ? "screen3b" : `screen${n}`;
+  document.getElementById(id).classList.add("active");
+  const labels = {1:"Schritt 1 von 4",2:"Schritt 2 von 4","3a":"Schritt 3 von 4","3b":"Schritt 4 von 4"};
+  document.getElementById("stepBadge").textContent = labels[n] || "";
+}
+
+// ── Screen 1: Upload ───────────────────────────────────────────────
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+let selectedFile = null;
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragover");
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById("fileName").textContent = file.name;
+  document.getElementById("btnUpload").disabled = false;
+}
+
+document.getElementById("btnUpload").addEventListener("click", async () => {
+  const btn = document.getElementById("btnUpload");
+  btn.disabled = true; btn.textContent = "Wird geladen…";
+  const errEl = document.getElementById("uploadError");
+  errEl.classList.add("d-none");
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+  fd.append("entity_type", document.getElementById("entityType").value);
+
+  try {
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
+
+    S.entityType = document.getElementById("entityType").value;
+    S.allRows = data.all_rows;
+    S.columns = data.columns;
+    S.preview = data.preview;
+    S.targetFields = data.target_fields;
+
+    // Apply suggestions as default mapping
+    S.mapping = {};
+    for (const [col, suggestion] of Object.entries(data.suggestions)) {
+      S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+    }
+
+    buildMappingTable();
+    showScreen(2);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("d-none");
+  } finally {
+    btn.disabled = false; btn.textContent = "Weiter →";
+  }
+});
+
+// ── Screen 2: Column Mapping ───────────────────────────────────────
+function buildMappingTable() {
+  const tbody = document.getElementById("mappingTable");
+
+  const options = [
+    '<option value="_ignore">— ignorieren —</option>',
+    ...S.targetFields.map(f => {
+      const label = f.required ? `${f.name} *` : f.name;
+      return `<option value="${f.name}">${label}</option>`;
+    })
+  ].join("");
+
+  tbody.innerHTML = S.columns.map(col => {
+    const previewVal = S.preview[0]?.[col] ?? "";
+    const currentVal = S.mapping[col] || "_ignore";
+    return `<tr>
+      <td class="fw-semibold">${col}</td>
+      <td>
+        <select class="form-select form-select-sm mapping-select" data-col="${col}">
+          ${options}
+        </select>
+      </td>
+      <td class="text-muted small">${previewVal}</td>
+    </tr>`;
+  }).join("");
+
+  // Set saved mapping values
+  tbody.querySelectorAll(".mapping-select").forEach(sel => {
+    sel.value = S.mapping[sel.dataset.col] || "_ignore";
+    sel.addEventListener("change", () => {
+      S.mapping[sel.dataset.col] = sel.value;
+      checkRequiredMapped();
+    });
+  });
+  checkRequiredMapped();
+}
+
+function checkRequiredMapped() {
+  const requiredFields = new Set(S.targetFields.filter(f => f.required).map(f => f.name));
+  const mappedTargets = new Set(Object.values(S.mapping).filter(v => v !== "_ignore"));
+  const allMapped = [...requiredFields].every(f => mappedTargets.has(f));
+  document.getElementById("btnValidate").disabled = !allMapped;
+  document.getElementById("mappingWarning").classList.toggle("d-none", allMapped);
+}
+
+document.getElementById("btnValidate").addEventListener("click", async () => {
+  const btn = document.getElementById("btnValidate");
+  btn.disabled = true; btn.textContent = "Prüfe…";
+  try {
+    await validateAndShowErrors(S.allRows);
+    showScreen("3a");
+  } finally {
+    btn.disabled = false; btn.textContent = "Prüfen & Weiter →";
+  }
+});
+
+// ── Screen 3a: Error Correction ────────────────────────────────────
+async function validateAndShowErrors(rows) {
+  const res = await fetch("/validate", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ rows, entity_type: S.entityType, mapping: S.mapping }),
+  });
+  const data = await res.json();
+  S.validRows = data.valid_rows;
+  S.errorRows = data.error_rows;
+  renderErrorScreen();
+}
+
+function renderErrorScreen() {
+  const summary = document.getElementById("validationSummary");
+  const total = S.validRows.length + S.errorRows.length;
+
+  summary.innerHTML = `
+    <strong>${S.validRows.length} von ${total} Zeilen korrekt.</strong>
+    ${S.errorRows.length > 0 ? ` <span class="text-danger">${S.errorRows.length} Zeile(n) mit Fehlern.</span>` : ""}
+  `;
+
+  const container = document.getElementById("errorTable");
+  if (S.errorRows.length === 0) {
+    container.innerHTML = '<div class="alert alert-success">Keine Fehler — alle Zeilen sind importierbar.</div>';
+    document.getElementById("btnDownload").classList.remove("d-none");
+    return;
+  }
+
+  container.innerHTML = S.errorRows.map(row => {
+    const isSkipped = S.skipped.has(row.row_index);
+    const errorList = row.errors.map(e =>
+      `<li><strong>${e.field}:</strong> ${e.reason}</li>`
+    ).join("");
+
+    const editableFields = Object.entries(row.row_data).map(([f, val]) => {
+      const hasError = row.errors.some(e => e.field === f);
+      const correction = S.corrections[row.row_index]?.[f] ?? val;
+      return `<td class="${hasError ? "table-danger" : ""}">
+        <input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent"
+          data-row="${row.row_index}" data-field="${f}"
+          value="${correction.replace(/"/g, '&quot;')}" ${isSkipped ? "disabled" : ""}>
+      </td>`;
+    }).join("");
+
+    const fieldHeaders = Object.keys(row.row_data).map(f => `<th class="small">${f}</th>`).join("");
+
+    return `<div class="card mb-2 ${isSkipped ? "opacity-50" : "border-danger"}">
+      <div class="card-header d-flex justify-content-between align-items-center py-1">
+        <span class="small fw-semibold text-danger">Zeile ${row.row_index + 1}</span>
+        <div class="form-check mb-0">
+          <input class="form-check-input skip-check" type="checkbox" id="skip${row.row_index}"
+            data-row="${row.row_index}" ${isSkipped ? "checked" : ""}>
+          <label class="form-check-label small" for="skip${row.row_index}">Überspringen</label>
+        </div>
+      </div>
+      <div class="card-body py-2">
+        <ul class="small text-danger mb-2">${errorList}</ul>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr>${fieldHeaders}</tr></thead>
+            <tbody><tr>${editableFields}</tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Events: inline corrections
+  container.querySelectorAll("input[data-row]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const ri = parseInt(inp.dataset.row);
+      const f = inp.dataset.field;
+      if (!S.corrections[ri]) S.corrections[ri] = {};
+      S.corrections[ri][f] = inp.value;
+    });
+  });
+
+  // Events: skip checkboxes
+  container.querySelectorAll(".skip-check").forEach(chk => {
+    chk.addEventListener("change", () => {
+      const ri = parseInt(chk.dataset.row);
+      if (chk.checked) S.skipped.add(ri);
+      else S.skipped.delete(ri);
+      const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+      document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+    });
+  });
+
+  document.getElementById("btnDownload").classList.add("d-none");
+}
+
+document.getElementById("btnRevalidate").addEventListener("click", async () => {
+  // Apply corrections back into rows: corrections stored by target field name
+  const correctedRows = S.allRows.map((row, i) => {
+    if (!S.corrections[i]) return row;
+    const corrected = { ...row };
+    for (const [srcCol, targetField] of Object.entries(S.mapping)) {
+      if (S.corrections[i]?.[targetField] !== undefined) {
+        corrected[srcCol] = S.corrections[i][targetField];
+      }
+    }
+    return corrected;
+  });
+  S.corrections = {};
+  S.skipped = new Set();
+  await validateAndShowErrors(correctedRows);
+});
+
+document.getElementById("btnDownload").addEventListener("click", () => {
+  const skippedRows = S.errorRows
+    .filter(r => S.skipped.has(r.row_index))
+    .map(r => ({ ...r.row_data, _fehler: r.errors.map(e => `${e.field}: ${e.reason}`).join("; ") }));
+  S._skippedRows = skippedRows;
+  showScreen("3b");
+  const total = S.validRows.length;
+  const skipped = skippedRows.length;
+  document.getElementById("downloadSummary").innerHTML =
+    `<strong>${total} Zeile(n) exportiert${skipped ? `, ${skipped} übersprungen` : ""}.</strong>
+    ${total > 100 ? " Die Datei wird automatisch in Teile à 100 Zeilen aufgeteilt (ZIP)." : ""}`;
+});
+
+// ── Screen 3b: Download ────────────────────────────────────────────
+document.getElementById("btnDoDownload").addEventListener("click", async () => {
+  const btn = document.getElementById("btnDoDownload");
+  btn.disabled = true; btn.textContent = "Wird erstellt…";
+  try {
+    const res = await fetch("/download", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        valid_rows: S.validRows,
+        skipped_rows: S._skippedRows || [],
+        entity_type: S.entityType,
+      }),
+    });
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const nameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const filename = nameMatch ? nameMatch[1] : "import.csv";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } finally {
+    btn.disabled = false; btn.textContent = "CSV herunterladen ↓";
+  }
+});
+</script>
 </body>
 </html>
