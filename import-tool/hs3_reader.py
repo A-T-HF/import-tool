@@ -297,13 +297,15 @@ def read_hs3(file_path: str | Path, entity_type: str) -> list[dict]:
         con = _connect(fdb_path)
         try:
             if entity_type == "guest":
-                return read_guests(con)
+                rows = read_guests(con)
             elif entity_type == "company":
-                return read_companies(con)
+                rows = read_companies(con)
             elif entity_type == "reservation":
-                return read_reservations(con)
+                rows = read_reservations(con)
             else:
                 raise ValueError(f"Unbekannter Entitätstyp: {entity_type}")
+            # Strip empty strings so HotelFriend doesn't try to validate blank optional fields
+            return [{k: v for k, v in row.items() if v != ""} for row in rows]
         finally:
             con.close()
 
