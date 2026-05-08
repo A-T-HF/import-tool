@@ -4,6 +4,7 @@ import zipfile
 from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from transformer import get_fields, suggest_mapping, transform, ENTITY_TYPES
+from hs3_reader import read_hs3
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB Limit
@@ -22,7 +23,19 @@ def upload():
     filename = f.filename or ""
     try:
         if filename.endswith(".csv"):
-            df = pd.read_csv(f, dtype=str, keep_default_na=False)
+            raw = f.read()
+            # Auto-detect encoding: try UTF-8, fall back to cp1252 (Windows/Mews exports)
+            try:
+                sample = raw[:2048].decode("utf-8-sig")
+            except UnicodeDecodeError:
+                sample = raw[:2048].decode("cp1252", errors="replace")
+            encoding = "utf-8-sig" if "Ã" not in sample else "cp1252"
+            # Auto-detect separator: semicolon (German Excel) or comma
+            sep = ";" if sample.count(";") > sample.count(",") else ","
+            df = pd.read_csv(
+                io.BytesIO(raw), sep=sep, encoding=encoding, dtype=str,
+                keep_default_na=False, on_bad_lines="skip"
+            )
         else:
             df = pd.read_excel(f, dtype=str, keep_default_na=False)
     except Exception as e:
@@ -42,6 +55,36 @@ def upload():
         "suggestions": suggestions,
         "target_fields": target_fields,
     })
+
+@app.route("/upload_hs3", methods=["POST"])
+def upload_hs3():
+    f = request.files.get("file")
+    entity_type = request.form.get("entity_type")
+    if not f or entity_type not in ENTITY_TYPES:
+        return jsonify({"error": "Ungültige Anfrage"}), 400
+
+    import tempfile, os
+    suffix = ".hsb" if (f.filename or "").lower().endswith(".hsb") else ".fdb"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        f.save(tmp.name)
+        tmp.close()
+        rows = read_hs3(tmp.name, entity_type)
+    except Exception as e:
+        return jsonify({"error": f"HS3-Datei konnte nicht gelesen werden: {e}"}), 400
+    finally:
+        os.unlink(tmp.name)
+
+    if not rows:
+        return jsonify({"error": "Keine Datensätze gefunden."}), 400
+
+    return jsonify({
+        "rows": rows,
+        "preview": rows[:5],
+        "valid_count": len(rows),
+        "source": "hs3",
+    })
+
 
 @app.route("/validate", methods=["POST"])
 def validate():

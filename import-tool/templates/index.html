@@ -39,13 +39,14 @@
     </div>
     <div class="mb-3">
       <div class="drop-zone" id="dropZone">
-        <p class="mb-1 text-muted">CSV, XLS oder XLSX hierher ziehen</p>
+        <p class="mb-1 text-muted">CSV, XLS, XLSX oder HS3-Backup (.hsb) hierher ziehen</p>
         <p class="mb-2 text-muted small">oder</p>
         <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('fileInput').click()">
           Datei auswählen
         </button>
-        <input type="file" id="fileInput" accept=".csv,.xls,.xlsx">
+        <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.hsb,.fdb">
         <p id="fileName" class="mt-2 mb-0 text-muted small"></p>
+        <p id="hs3Badge" class="mt-1 mb-0 d-none"><span class="badge bg-info text-dark">HS3 Direktimport — Spaltenzuordnung wird übersprungen</span></p>
       </div>
     </div>
     <div id="uploadError" class="alert alert-danger d-none"></div>
@@ -77,7 +78,7 @@
     <div id="validationSummary" class="alert alert-info mb-3"></div>
     <div id="errorTable"></div>
     <div class="d-flex gap-2 mt-3">
-      <button class="btn btn-outline-secondary" onclick="showScreen(2)">← Zurück</button>
+      <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
     </div>
@@ -138,6 +139,8 @@ function handleFile(file) {
   selectedFile = file;
   document.getElementById("fileName").textContent = file.name;
   document.getElementById("btnUpload").disabled = false;
+  const isHs3 = file.name.toLowerCase().endsWith(".hsb") || file.name.toLowerCase().endsWith(".fdb");
+  document.getElementById("hs3Badge").classList.toggle("d-none", !isHs3);
 }
 
 document.getElementById("btnUpload").addEventListener("click", async () => {
@@ -149,26 +152,48 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
   const fd = new FormData();
   fd.append("file", selectedFile);
   fd.append("entity_type", document.getElementById("entityType").value);
+  S.entityType = document.getElementById("entityType").value;
+
+  const isHs3 = selectedFile.name.toLowerCase().endsWith(".hsb") ||
+                selectedFile.name.toLowerCase().endsWith(".fdb");
 
   try {
-    const res = await fetch("/upload", { method: "POST", body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
+    if (isHs3) {
+      // HS3 direct import — skip column mapping, go straight to validation
+      btn.textContent = "HS3 wird eingelesen…";
+      const res = await fetch("/upload_hs3", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
 
-    S.entityType = document.getElementById("entityType").value;
-    S.allRows = data.all_rows;
-    S.columns = data.columns;
-    S.preview = data.preview;
-    S.targetFields = data.target_fields;
+      S.allRows = data.rows;
+      S.targetFields = [];  // not needed — rows already have HF field names
 
-    // Apply suggestions as default mapping
-    S.mapping = {};
-    for (const [col, suggestion] of Object.entries(data.suggestions)) {
-      S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+      // Identity mapping: field → itself
+      const fields = S.allRows.length ? Object.keys(S.allRows[0]) : [];
+      S.mapping = Object.fromEntries(fields.map(f => [f, f]));
+
+      // Validate directly and skip to screen 3a
+      await validateAndShowErrors(S.allRows);
+      showScreen("3a");
+    } else {
+      const res = await fetch("/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
+
+      S.allRows = data.all_rows;
+      S.columns = data.columns;
+      S.preview = data.preview;
+      S.targetFields = data.target_fields;
+
+      // Apply suggestions as default mapping
+      S.mapping = {};
+      for (const [col, suggestion] of Object.entries(data.suggestions)) {
+        S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+      }
+
+      buildMappingTable();
+      showScreen(2);
     }
-
-    buildMappingTable();
-    showScreen(2);
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove("d-none");
@@ -325,14 +350,28 @@ function renderErrorScreen() {
   document.getElementById("btnDownload").classList.add("d-none");
 }
 
+// Back button on 3a: go to mapping (CSV) or upload (HS3)
+document.getElementById("btnBack3a").addEventListener("click", () => {
+  const isHs3 = selectedFile && (selectedFile.name.toLowerCase().endsWith(".hsb") ||
+                                  selectedFile.name.toLowerCase().endsWith(".fdb"));
+  showScreen(isHs3 ? 1 : 2);
+});
+
 document.getElementById("btnRevalidate").addEventListener("click", async () => {
-  // Apply corrections back into rows: corrections stored by target field name
+  // Apply corrections back into rows
+  const isHs3 = selectedFile && (selectedFile.name.toLowerCase().endsWith(".hsb") ||
+                                   selectedFile.name.toLowerCase().endsWith(".fdb"));
   const correctedRows = S.allRows.map((row, i) => {
     if (!S.corrections[i]) return row;
     const corrected = { ...row };
-    for (const [srcCol, targetField] of Object.entries(S.mapping)) {
-      if (S.corrections[i]?.[targetField] !== undefined) {
-        corrected[srcCol] = S.corrections[i][targetField];
+    if (isHs3) {
+      // Rows already use HF field names — apply corrections directly
+      Object.assign(corrected, S.corrections[i]);
+    } else {
+      for (const [srcCol, targetField] of Object.entries(S.mapping)) {
+        if (S.corrections[i]?.[targetField] !== undefined) {
+          corrected[srcCol] = S.corrections[i][targetField];
+        }
       }
     }
     return corrected;
