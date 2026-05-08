@@ -79,6 +79,7 @@
     <div id="errorTable"></div>
     <div class="d-flex gap-2 mt-3">
       <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
+      <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
     </div>
@@ -162,7 +163,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       // HS3 direct import — skip column mapping, go straight to validation
       btn.textContent = "HS3 wird eingelesen…";
       const res = await fetch("/upload_hs3", { method: "POST", body: fd });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
 
       S.allRows = data.rows;
@@ -177,7 +178,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       showScreen("3a");
     } else {
       const res = await fetch("/upload", { method: "POST", body: fd });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
 
       S.allRows = data.all_rows;
@@ -348,7 +349,23 @@ function renderErrorScreen() {
   });
 
   document.getElementById("btnDownload").classList.add("d-none");
+
+  // Show bulk-skip button if any errors are only about missing email
+  const emailOnlyErrors = S.errorRows.filter(r =>
+    r.errors.every(e => e.field === "email")
+  );
+  document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
 }
+
+document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
+  S.errorRows.forEach(r => {
+    if (r.errors.every(e => e.field === "email")) S.skipped.add(r.row_index);
+  });
+  const remaining = S.errorRows.filter(r => !S.skipped.has(r.row_index));
+  const allHandled = remaining.length === 0;
+  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+  renderErrorScreen();
+});
 
 // Back button on 3a: go to mapping (CSV) or upload (HS3)
 document.getElementById("btnBack3a").addEventListener("click", () => {

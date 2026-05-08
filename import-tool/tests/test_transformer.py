@@ -13,7 +13,7 @@ def test_guest_required_fields():
 def test_company_required_fields():
     fields = get_fields("company")
     required = [f["name"] for f in fields if f["required"]]
-    assert set(required) == {"name", "email"}
+    assert set(required) == {"name"}
 
 def test_reservation_required_fields():
     fields = get_fields("reservation")

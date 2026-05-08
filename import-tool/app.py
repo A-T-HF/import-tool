@@ -7,7 +7,7 @@ from transformer import get_fields, suggest_mapping, transform, ENTITY_TYPES
 from hs3_reader import read_hs3
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB Limit
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB (HSB-Backups bis ~30 MB)
 
 @app.route("/")
 def index():

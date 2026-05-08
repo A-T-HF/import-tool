@@ -22,7 +22,7 @@ _GUEST_FIELDS = [
 
 _COMPANY_FIELDS = [
     {"name": "name",           "required": True,  "transformer": None,      "validator": None},
-    {"name": "email",          "required": True,  "transformer": None,      "validator": "email"},
+    {"name": "email",          "required": False, "transformer": None,      "validator": "email"},
     {"name": "code",           "required": False, "transformer": None,      "validator": "company_code"},
     {"name": "phone",          "required": False, "transformer": None,      "validator": None},
     {"name": "phone2",         "required": False, "transformer": None,      "validator": None},
@@ -48,7 +48,7 @@ _RESERVATION_FIELDS = [
     {"name": "Check Out",  "required": True,  "transformer": "date", "validator": None},
     {"name": "Zimmer",     "required": True,  "transformer": None,   "validator": None},
     {"name": "Zimmertyp",  "required": True,  "transformer": None,   "validator": None},
-    {"name": "Summe",      "required": False, "transformer": None,   "validator": None},
+    {"name": "Summe",      "required": False, "transformer": "amount", "validator": None},
     {"name": "Status",     "required": False, "transformer": "reservation_status", "validator": None},
 ]
 
@@ -66,6 +66,7 @@ import re
 
 # --- Datum ---
 _DATE_FORMATS = [
+    "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",  # Mews: "29.01.2026 15:00"
     "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%d.%m.%y", "%m/%d/%y",
@@ -150,7 +151,7 @@ def transform_title(value: str) -> str | None:
 # --- Reservierungsstatus ---
 _STATUS_MAP = {
     "neu": "new", "new": "new",
-    "bestätigt": "confirmed", "confirmed": "confirmed",
+    "bestätigt": "confirmed", "confirmed": "confirmed", "optional": "booking_offer",
     "eingecheckt": "check_in", "check_in": "check_in",
     "ausgecheckt": "check_out", "check_out": "check_out",
     "storniert (gast)": "cancelled_by_guest", "cancelled_by_guest": "cancelled_by_guest",
@@ -159,6 +160,18 @@ _STATUS_MAP = {
     "due_in": "due_in", "due_out": "due_out",
     "booking_offer": "booking_offer",
 }
+
+def transform_amount(value: str) -> str | None:
+    """Strip currency symbols and convert German decimal comma to dot. '€129,00' → '129.00'"""
+    if not value or not value.strip():
+        return None
+    v = re.sub(r"[€$£\s]", "", value.strip()).replace(",", ".")
+    # If there are multiple dots (thousands separator), keep only last
+    parts = v.split(".")
+    if len(parts) > 2:
+        v = "".join(parts[:-1]) + "." + parts[-1]
+    return v if v else None
+
 
 def transform_reservation_status(value: str) -> str | None:
     if not value or not value.strip():
@@ -189,6 +202,7 @@ _TRANSFORMERS = {
     "gender":               transform_gender,
     "title":                transform_title,
     "reservation_status":   transform_reservation_status,
+    "amount":               transform_amount,
 }
 
 @dataclass
@@ -274,9 +288,9 @@ _FIELD_ALIASES: dict[str, list[str]] = {
     "language":     ["Sprache", "Language"],
     "Check In":     ["Arrival", "Ankunft", "Check-in", "Anreise", "Von"],
     "Check Out":    ["Departure", "Abreise", "Check-out", "Abreise", "Bis"],
-    "Zimmer":       ["Room", "Zimmer", "Zimmer-Nr", "Room Number"],
-    "Zimmertyp":    ["Room Type", "Zimmertyp", "Kategorie"],
-    "Summe":        ["Total", "Betrag", "Preis", "Sum", "Amount"],
+    "Zimmer":       ["Room", "Zimmer", "Zimmer-Nr", "Room Number", "Raumnummer"],
+    "Zimmertyp":    ["Room Type", "Zimmertyp", "Kategorie", "Raumkategorie"],
+    "Summe":        ["Total", "Betrag", "Preis", "Sum", "Amount", "Gesamtbetrag"],
     "Status":       ["Status", "Buchungsstatus", "Booking Status"],
     "name":         ["Firma", "Company Name", "Firmenname", "Name"],
     "code":         ["ID", "Kunden-ID", "Code"],
