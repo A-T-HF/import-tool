@@ -17,9 +17,10 @@ from pathlib import Path
 from datetime import date, datetime
 from decimal import Decimal
 
+_HERE = Path(__file__).parent
 HS3_FIREBIRD_HOME = os.environ.get(
     "HS3_FIREBIRD_HOME",
-    "/tmp/fb5_arm64/Firebird.pkg/Versions/A/Resources",
+    str(_HERE / "firebird"),
 )
 
 _fb_loaded = False
