@@ -143,8 +143,16 @@ def _fmt_decimal(v) -> str:
 
 # ── Public reader functions ────────────────────────────────────────────────
 
+def _build_language_map(con) -> dict[int, str]:
+    """Build {hs3_language_id: iso639_code} from SYS_LANGUAGES."""
+    cur = con.cursor()
+    cur.execute("SELECT ID, ISO639 FROM SYS_LANGUAGES WHERE ISO639 IS NOT NULL AND ISO639 <> ''")
+    return {r[0]: r[1].strip().lower() for r in cur.fetchall()}
+
+
 def read_guests(con) -> list[dict]:
     """Return BAS_CUSTOMERS persons (CUSTTYPE=1) mapped to HotelFriend guest fields."""
+    lang_map = _build_language_map(con)
     cur = con.cursor()
     cur.execute("""
         SELECT ID, SALUTATION, NAME1, NAME2, EMAIL, PHONE1,
@@ -175,6 +183,7 @@ def read_guests(con) -> list[dict]:
             "gender":       _GENDER_MAP.get(r.get("GENDER"), ""),
             "title":        _TITLE_MAP.get(title_raw, ""),
             "nationality":  (r.get("NATIONALITY") or "").replace("---", "").strip(),
+            "language":     lang_map.get(r.get("LANGUAGE"), ""),
         })
     return rows
 
