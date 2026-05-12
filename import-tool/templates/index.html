@@ -80,6 +80,7 @@
     <div class="d-flex gap-2 mt-3">
       <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
       <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
+      <button id="btnSkipNoFirstName" class="btn btn-outline-warning d-none">Alle ohne Vorname überspringen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
     </div>
@@ -372,19 +373,32 @@ function renderErrorScreen() {
 
   document.getElementById("btnDownload").classList.add("d-none");
 
-  // Show bulk-skip button if any errors are only about missing email
+  // Show bulk-skip buttons
   const emailOnlyErrors = S.errorRows.filter(r =>
     r.errors.every(e => e.field === "email")
   );
   document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
+
+  const firstNameOnlyErrors = S.errorRows.filter(r =>
+    r.errors.every(e => e.field === "first_name")
+  );
+  document.getElementById("btnSkipNoFirstName").classList.toggle("d-none", firstNameOnlyErrors.length === 0);
 }
 
 document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
   S.errorRows.forEach(r => {
     if (r.errors.every(e => e.field === "email")) S.skipped.add(r.row_index);
   });
-  const remaining = S.errorRows.filter(r => !S.skipped.has(r.row_index));
-  const allHandled = remaining.length === 0;
+  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+  renderErrorScreen();
+});
+
+document.getElementById("btnSkipNoFirstName").addEventListener("click", () => {
+  S.errorRows.forEach(r => {
+    if (r.errors.every(e => e.field === "first_name")) S.skipped.add(r.row_index);
+  });
+  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
   document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
   renderErrorScreen();
 });
