@@ -141,6 +141,23 @@ def _fmt_decimal(v) -> str:
     return str(v.quantize(Decimal("0.01"))) if isinstance(v, Decimal) else str(v)
 
 
+def _split_names(name1: str, name2: str) -> tuple[str, str]:
+    """
+    Return (last_name, first_name).
+    If name2 is empty but name1 contains a space, split on the last space:
+      "Max Müller" → first="Max", last="Müller"
+    If name2 is empty and name1 has no space, first_name stays empty
+    (row will fail required-field validation and surface as an error).
+    """
+    last = name1.strip()
+    first = name2.strip()
+    if not first and " " in last:
+        idx = last.rfind(" ")
+        first = last[:idx].strip()
+        last = last[idx + 1:].strip()
+    return last, first
+
+
 # ── Public reader functions ────────────────────────────────────────────────
 
 def _build_language_map(con) -> dict[int, str]:
@@ -169,9 +186,10 @@ def read_guests(con) -> list[dict]:
         if not r.get("NAME1"):
             continue
         title_raw = (r.get("SALUTATION") or "").strip().lower()
+        last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
         rows.append({
-            "last_name":    (r.get("NAME1") or "").strip(),
-            "first_name":   (r.get("NAME2") or "").strip(),
+            "last_name":    last_name,
+            "first_name":   first_name,
             "email":        (r.get("EMAIL") or "").strip(),
             "phone":        (r.get("PHONE1") or "").strip(),
             "country":      (r.get("COUNTRY") or "").strip(),
@@ -251,16 +269,13 @@ def read_reservations(con) -> list[dict]:
         if status_code is None:
             continue  # skip blocked/setup slots
 
-        name1 = (r.get("NAME1") or "").strip()
-        # Split "Lastname Firstname" pattern if NAME2 is empty
-        name2 = (r.get("NAME2") or "").strip()
-
+        last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
         product_id = r.get("PRODUCTID")
         room_type = roomtype_map.get(product_id, str(product_id) if product_id else "")
 
         rows.append({
-            "last_name":  name1,
-            "first_name": name2,
+            "last_name":  last_name,
+            "first_name": first_name,
             "email":      (r.get("EMAIL") or "").strip(),
             "Check In":   _fmt_date(r.get("DATE_FROM")),
             "Check Out":  _fmt_date(r.get("DATE_TO")),
