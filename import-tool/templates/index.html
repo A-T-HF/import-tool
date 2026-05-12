@@ -295,6 +295,11 @@ function renderErrorScreen() {
     ).join("");
 
     const visibleEntries = Object.entries(row.row_data).filter(([f]) => !f.startsWith("_"));
+    const hs3Id = row.row_data._hs3_id;
+    const hs3IdCell = hs3Id != null
+      ? `<td class="text-muted small align-middle" style="white-space:nowrap">${hs3Id}</td>`
+      : "";
+    const hs3IdHeader = hs3Id != null ? `<th class="small text-muted">HS3-ID</th>` : "";
     const editableFields = visibleEntries.map(([f, val]) => {
       const hasError = row.errors.some(e => e.field === f);
       const correction = S.corrections[row.row_index]?.[f] ?? val;
@@ -320,8 +325,8 @@ function renderErrorScreen() {
         <ul class="small text-danger mb-2">${errorList}</ul>
         <div class="table-responsive">
           <table class="table table-sm table-bordered mb-0">
-            <thead><tr>${fieldHeaders}</tr></thead>
-            <tbody><tr>${editableFields}</tr></tbody>
+            <thead><tr>${hs3IdHeader}${fieldHeaders}</tr></thead>
+            <tbody><tr>${hs3IdCell}${editableFields}</tr></tbody>
           </table>
         </div>
       </div>
