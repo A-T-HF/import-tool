@@ -135,6 +135,13 @@ def _fmt_date(v) -> str:
     return str(v)
 
 
+def _country_from_postcode(country: str, postcode: str) -> str:
+    """Infer DE if country is empty but postcode is exactly 5 digits."""
+    if not country and postcode and postcode.strip().isdigit() and len(postcode.strip()) == 5:
+        return "DE"
+    return country
+
+
 def _fmt_decimal(v) -> str:
     if v is None:
         return ""
@@ -183,7 +190,7 @@ def read_guests(con) -> list[dict]:
     # ── 1. Base records ────────────────────────────────────────────────────
     cur.execute("""
         SELECT ID, SALUTATION, NAME1, NAME2, EMAIL, PHONE1,
-               COUNTRY, CITY, BIRTHDAY, GENDER, NATIONALITY, LANGUAGE
+               COUNTRY, CITY, ZIPCODE, BIRTHDAY, GENDER, NATIONALITY, LANGUAGE
         FROM BAS_CUSTOMERS
         WHERE ID > 0
           AND CUSTTYPE = 1
@@ -258,7 +265,9 @@ def read_guests(con) -> list[dict]:
             "first_name":    first_name,
             "email":         email,
             "phone":         (r.get("PHONE1") or "").strip(),
-            "country":       (r.get("COUNTRY") or "").strip(),
+            "country":       _country_from_postcode(
+                                 (r.get("COUNTRY") or "").strip(),
+                                 (r.get("ZIPCODE") or "").strip()),
             "city":          (r.get("CITY") or "").strip(),
             "date_of_birth": _fmt_date(r.get("BIRTHDAY")),
             "gender":        gender,
@@ -289,7 +298,9 @@ def read_companies(con) -> list[dict]:
             "name":     name,
             "email":    (r.get("EMAIL") or "").strip(),
             "phone":    (r.get("PHONE1") or "").strip(),
-            "country":  (r.get("COUNTRY") or "").strip(),
+            "country":  _country_from_postcode(
+                            (r.get("COUNTRY") or "").strip(),
+                            (r.get("ZIPCODE") or "").strip()),
             "city":     (r.get("CITY") or "").strip(),
             "address":  (r.get("STREET") or "").strip(),
             "postcode": (r.get("ZIPCODE") or "").strip(),
