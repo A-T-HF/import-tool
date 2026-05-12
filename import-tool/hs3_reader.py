@@ -186,6 +186,10 @@ def read_guests(con) -> list[dict]:
         if not r.get("NAME1"):
             continue
         title_raw = (r.get("SALUTATION") or "").strip().lower()
+        title = _TITLE_MAP.get(title_raw, "")
+        gender = _GENDER_MAP.get(r.get("GENDER"), "")
+        if not gender:
+            gender = {"mr": "1", "mrs": "2", "miss": "2"}.get(title, "")
         last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
         rows.append({
             "last_name":    last_name,
@@ -195,8 +199,8 @@ def read_guests(con) -> list[dict]:
             "country":      (r.get("COUNTRY") or "").strip(),
             "city":         (r.get("CITY") or "").strip(),
             "date_of_birth": _fmt_date(r.get("BIRTHDAY")),
-            "gender":       _GENDER_MAP.get(r.get("GENDER"), ""),
-            "title":        _TITLE_MAP.get(title_raw, ""),
+            "gender":       gender,
+            "title":        title,
             "nationality":  (r.get("NATIONALITY") or "").replace("---", "").strip(),
             "language":     lang_map.get(r.get("LANGUAGE"), ""),
         })
