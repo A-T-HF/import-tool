@@ -404,11 +404,17 @@ function renderValidTable() {
   const headers = fields.map(f => `<th class="small">${f}</th>`).join("");
   const bodyRows = S.validRows.map((row, idx) => {
     const cells = fields.map(f => {
-      const val = (S.validCorrections[idx]?.[f] ?? row[f]) || "";
-      return `<td><input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent valid-edit"
-        data-idx="${idx}" data-field="${f}" value="${String(val).replace(/"/g, '&quot;')}"></td>`;
+      const original = String(row[f] ?? "");
+      const current  = String(S.validCorrections[idx]?.[f] ?? original);
+      const changed  = S.validCorrections[idx]?.[f] !== undefined && S.validCorrections[idx][f] !== original;
+      const hint     = changed ? `<div class="text-muted" style="font-size:0.7em;white-space:nowrap">war: ${original || "—"}</div>` : "";
+      return `<td class="${changed ? "table-warning" : ""}">
+        <input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent valid-edit"
+          data-idx="${idx}" data-field="${f}" data-original="${original.replace(/"/g, '&quot;')}"
+          value="${current.replace(/"/g, '&quot;')}">${hint}</td>`;
     }).join("");
-    return `<tr>${cells}</tr>`;
+    const rowChanged = S.validCorrections[idx] !== undefined;
+    return `<tr class="${rowChanged ? "table-warning" : ""}">${cells}</tr>`;
   }).join("");
   container.innerHTML = `<div class="table-responsive" style="max-height:400px;overflow-y:auto">
     <table class="table table-sm table-bordered table-hover mb-0">
@@ -417,11 +423,30 @@ function renderValidTable() {
     </table>
   </div>`;
   container.querySelectorAll(".valid-edit").forEach(inp => {
-    inp.addEventListener("change", () => {
-      const idx = parseInt(inp.dataset.idx);
-      const f = inp.dataset.field;
+    inp.addEventListener("input", () => {
+      const idx      = parseInt(inp.dataset.idx);
+      const f        = inp.dataset.field;
+      const original = inp.dataset.original;
       if (!S.validCorrections[idx]) S.validCorrections[idx] = {};
       S.validCorrections[idx][f] = inp.value;
+      // Highlight cell + show original hint live
+      const td = inp.closest("td");
+      const changed = inp.value !== original;
+      td.classList.toggle("table-warning", changed);
+      let hint = td.querySelector(".text-muted");
+      if (changed) {
+        if (!hint) { hint = document.createElement("div"); hint.className = "text-muted"; hint.style.cssText = "font-size:0.7em;white-space:nowrap"; td.appendChild(hint); }
+        hint.textContent = `war: ${original || "—"}`;
+      } else {
+        hint?.remove();
+      }
+      // Highlight row
+      inp.closest("tr").classList.toggle("table-warning",
+        Object.values(S.validCorrections[idx] || {}).some((v, i) => {
+          const inputs = inp.closest("tbody").querySelectorAll(`input[data-idx="${idx}"]`);
+          return [...inputs].some(i2 => i2.value !== i2.dataset.original);
+        })
+      );
     });
   });
 }
