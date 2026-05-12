@@ -270,21 +270,23 @@ def read_guests(con) -> list[dict]:
 
 
 def read_companies(con) -> list[dict]:
-    """Return BAS_CUSTOMERS companies (CUSTTYPE=2) mapped to HotelFriend company fields."""
+    """Return BAS_CUSTOMERS companies (CUSTTYPE=2, not archived) mapped to HotelFriend company fields."""
     cur = con.cursor()
     cur.execute("""
         SELECT ID, NAME1, EMAIL, PHONE1, COUNTRY, CITY, STREET, ZIPCODE, IBAN, BIC
         FROM BAS_CUSTOMERS
-        WHERE ID > 0 AND CUSTTYPE = 2
+        WHERE ID > 0
+          AND CUSTTYPE = 2
+          AND COALESCE(ARCHIVE, 0) = 0
     """)
     cols = [d[0] for d in cur.description]
     rows = []
     for raw in cur.fetchall():
         r = dict(zip(cols, raw))
-        if not r.get("NAME1"):
-            continue
+        name = (r.get("NAME1") or "").strip() or "-"
         rows.append({
-            "name":     (r.get("NAME1") or "").strip(),
+            "_hs3_id":  r.get("ID"),
+            "name":     name,
             "email":    (r.get("EMAIL") or "").strip(),
             "phone":    (r.get("PHONE1") or "").strip(),
             "country":  (r.get("COUNTRY") or "").strip(),
@@ -336,10 +338,15 @@ def read_reservations(con) -> list[dict]:
             continue  # skip blocked/setup slots
 
         last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
+        if not first_name:
+            first_name = "-"
+        if not last_name:
+            last_name = "-"
         product_id = r.get("PRODUCTID")
         room_type = roomtype_map.get(product_id, str(product_id) if product_id else "")
 
         rows.append({
+            "_hs3_id":    r.get("ID"),
             "last_name":  last_name,
             "first_name": first_name,
             "email":      (r.get("EMAIL") or "").strip(),
