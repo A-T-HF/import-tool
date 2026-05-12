@@ -240,6 +240,10 @@ def read_guests(con) -> list[dict]:
             if derived:
                 first_name  = derived
                 name_source = "derived_from_email"
+        if not first_name:
+            first_name  = "-"
+            if name_source == "original":
+                name_source = "placeholder"
 
         title_raw = (r.get("SALUTATION") or "").strip().lower()
         title  = _TITLE_MAP.get(title_raw, "")

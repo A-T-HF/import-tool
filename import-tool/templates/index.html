@@ -80,7 +80,6 @@
     <div class="d-flex gap-2 mt-3">
       <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
       <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
-      <button id="btnSkipNoFirstName" class="btn btn-outline-warning d-none">Alle ohne Vorname überspringen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
     </div>
@@ -282,12 +281,13 @@ function renderErrorScreen() {
   const hasNameSource = allRows.some(r => r._name_source);
   let nameSourceHtml = "";
   if (hasNameSource) {
-    const counts = {original: 0, derived_from_email: 0, none: 0};
+    const counts = {original: 0, derived_from_email: 0, placeholder: 0, none: 0};
     allRows.forEach(r => { if (r._name_source) counts[r._name_source] = (counts[r._name_source] || 0) + 1; });
     nameSourceHtml = `<div class="mt-2 small">
       Namensauflösung:
       <span class="badge bg-success">${counts.original} original</span>
       ${counts.derived_from_email ? `<span class="badge bg-warning text-dark">${counts.derived_from_email} aus E-Mail abgeleitet</span>` : ""}
+      ${counts.placeholder ? `<span class="badge bg-secondary">${counts.placeholder} Vorname unbekannt (Platzhalter "-")</span>` : ""}
       ${counts.none ? `<span class="badge bg-danger">${counts.none} kein Name</span>` : ""}
     </div>`;
   }
@@ -379,10 +379,6 @@ function renderErrorScreen() {
   );
   document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
 
-  const firstNameOnlyErrors = S.errorRows.filter(r =>
-    r.errors.every(e => e.field === "first_name")
-  );
-  document.getElementById("btnSkipNoFirstName").classList.toggle("d-none", firstNameOnlyErrors.length === 0);
 }
 
 document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
@@ -394,14 +390,6 @@ document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
   renderErrorScreen();
 });
 
-document.getElementById("btnSkipNoFirstName").addEventListener("click", () => {
-  S.errorRows.forEach(r => {
-    if (r.errors.every(e => e.field === "first_name")) S.skipped.add(r.row_index);
-  });
-  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
-  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
-  renderErrorScreen();
-});
 
 // Back button on 3a: go to mapping (CSV) or upload (HS3)
 document.getElementById("btnBack3a").addEventListener("click", () => {
