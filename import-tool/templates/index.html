@@ -276,9 +276,25 @@ function renderErrorScreen() {
   const summary = document.getElementById("validationSummary");
   const total = S.validRows.length + S.errorRows.length;
 
+  // Name-source stats (only for HS3 guest imports)
+  const allRows = [...S.validRows, ...S.errorRows.map(e => e.row_data)];
+  const hasNameSource = allRows.some(r => r._name_source);
+  let nameSourceHtml = "";
+  if (hasNameSource) {
+    const counts = {original: 0, derived_from_email: 0, none: 0};
+    allRows.forEach(r => { if (r._name_source) counts[r._name_source] = (counts[r._name_source] || 0) + 1; });
+    nameSourceHtml = `<div class="mt-2 small">
+      Namensauflösung:
+      <span class="badge bg-success">${counts.original} original</span>
+      ${counts.derived_from_email ? `<span class="badge bg-warning text-dark">${counts.derived_from_email} aus E-Mail abgeleitet</span>` : ""}
+      ${counts.none ? `<span class="badge bg-danger">${counts.none} kein Name</span>` : ""}
+    </div>`;
+  }
+
   summary.innerHTML = `
     <strong>${S.validRows.length} von ${total} Zeilen korrekt.</strong>
     ${S.errorRows.length > 0 ? ` <span class="text-danger">${S.errorRows.length} Zeile(n) mit Fehlern.</span>` : ""}
+    ${nameSourceHtml}
   `;
 
   const container = document.getElementById("errorTable");

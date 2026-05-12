@@ -234,10 +234,12 @@ def read_guests(con) -> list[dict]:
         first_name, last_name = resolve_names(g["candidates"])
         email = (r.get("EMAIL") or "").strip()
 
+        name_source = "original" if (first_name or last_name) else "none"
         if not first_name and last_name and email:
             derived = derive_name_from_email(email, last_name)
             if derived:
-                first_name = derived
+                first_name  = derived
+                name_source = "derived_from_email"
 
         title_raw = (r.get("SALUTATION") or "").strip().lower()
         title  = _TITLE_MAP.get(title_raw, "")
@@ -247,6 +249,7 @@ def read_guests(con) -> list[dict]:
 
         rows.append({
             "_hs3_id":       custid,
+            "_name_source":  name_source,
             "last_name":     last_name,
             "first_name":    first_name,
             "email":         email,
