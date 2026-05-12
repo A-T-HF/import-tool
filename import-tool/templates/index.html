@@ -294,7 +294,8 @@ function renderErrorScreen() {
       `<li><strong>${e.field}:</strong> ${e.reason}</li>`
     ).join("");
 
-    const editableFields = Object.entries(row.row_data).map(([f, val]) => {
+    const visibleEntries = Object.entries(row.row_data).filter(([f]) => !f.startsWith("_"));
+    const editableFields = visibleEntries.map(([f, val]) => {
       const hasError = row.errors.some(e => e.field === f);
       const correction = S.corrections[row.row_index]?.[f] ?? val;
       return `<td class="${hasError ? "table-danger" : ""}">
@@ -304,11 +305,11 @@ function renderErrorScreen() {
       </td>`;
     }).join("");
 
-    const fieldHeaders = Object.keys(row.row_data).map(f => `<th class="small">${f}</th>`).join("");
+    const fieldHeaders = visibleEntries.map(([f]) => `<th class="small">${f}</th>`).join("");
 
     return `<div class="card mb-2 ${isSkipped ? "opacity-50" : "border-danger"}">
       <div class="card-header d-flex justify-content-between align-items-center py-1">
-        <span class="small fw-semibold text-danger">Zeile ${row.row_index + 1}</span>
+        <span class="small fw-semibold text-danger">Zeile ${row.row_index + 1}${row.row_data._hs3_id ? ` <span class="badge bg-secondary fw-normal">HS3-ID ${row.row_data._hs3_id}</span>` : ""}</span>
         <div class="form-check mb-0">
           <input class="form-check-input skip-check" type="checkbox" id="skip${row.row_index}"
             data-row="${row.row_index}" ${isSkipped ? "checked" : ""}>

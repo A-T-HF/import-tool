@@ -192,6 +192,7 @@ def read_guests(con) -> list[dict]:
             gender = {"mr": "1", "mrs": "2", "miss": "2"}.get(title, "")
         last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
         rows.append({
+            "_hs3_id":      r.get("ID"),
             "last_name":    last_name,
             "first_name":   first_name,
             "email":        (r.get("EMAIL") or "").strip(),

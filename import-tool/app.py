@@ -107,8 +107,9 @@ def validate():
 @app.route("/download", methods=["POST"])
 def download():
     data = request.get_json()
-    valid_rows = data.get("valid_rows", [])
-    skipped_rows = data.get("skipped_rows", [])
+    # Strip internal meta-fields (prefixed with _) before export
+    valid_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in data.get("valid_rows", [])]
+    skipped_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in data.get("skipped_rows", [])]
     entity_type = data.get("entity_type", "data")
 
     def rows_to_csv_bytes(rows: list[dict]) -> bytes:
