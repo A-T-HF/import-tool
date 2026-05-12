@@ -168,42 +168,96 @@ def _build_language_map(con) -> dict[int, str]:
 
 
 def read_guests(con) -> list[dict]:
-    """Return BAS_CUSTOMERS persons (CUSTTYPE=1) mapped to HotelFriend guest fields."""
+    """
+    Return persons from BAS_CUSTOMERS (CUSTTYPE=1, not archived) mapped to
+    HotelFriend guest fields.
+
+    Names are resolved from three sources per CUSTID and enriched via email
+    pattern matching — see guests_importer for the full resolution logic.
+    """
+    from guests_importer import is_company_name, resolve_names, derive_name_from_email
+
     lang_map = _build_language_map(con)
     cur = con.cursor()
+
+    # ── 1. Base records ────────────────────────────────────────────────────
     cur.execute("""
         SELECT ID, SALUTATION, NAME1, NAME2, EMAIL, PHONE1,
-               COUNTRY, CITY, STREET, ZIPCODE,
-               BIRTHDAY, GENDER, NATIONALITY, LANGUAGE
+               COUNTRY, CITY, BIRTHDAY, GENDER, NATIONALITY, LANGUAGE
         FROM BAS_CUSTOMERS
-        WHERE ID > 0 AND CUSTTYPE = 1
+        WHERE ID > 0
+          AND CUSTTYPE = 1
+          AND COALESCE(ARCHIVE, 0) = 0
     """)
     cols = [d[0] for d in cur.description]
-    rows = []
+    base: dict[int, dict] = {}
     for raw in cur.fetchall():
         r = dict(zip(cols, raw))
-        # Skip entries without a real name
-        if not r.get("NAME1"):
+        last = (r.get("NAME1") or "").strip()
+        if not last or is_company_name(last):
             continue
+        custid = r["ID"]
+        base[custid] = {
+            "r":          r,
+            "candidates": [{"first_name": (r.get("NAME2") or "").strip(),
+                            "last_name":  last}],
+        }
+
+    # ── 2. Booking-holder names from MOV_RESERVATIONS ─────────────────────
+    cur.execute("SELECT CUSTID, NAME1, NAME2 FROM MOV_RESERVATIONS WHERE CUSTID > 0")
+    for custid, name1, name2 in cur.fetchall():
+        if custid not in base:
+            continue
+        last = (name1 or "").strip()
+        if last and not is_company_name(last):
+            base[custid]["candidates"].append(
+                {"first_name": (name2 or "").strip(), "last_name": last}
+            )
+
+    # ── 3. Registration-form guests from MOV_RESERVATIONS_GUESTS ──────────
+    cur.execute(
+        "SELECT CUSTID, LASTNAME, FIRSTNAME FROM MOV_RESERVATIONS_GUESTS WHERE CUSTID > 0"
+    )
+    for custid, lastname, firstname in cur.fetchall():
+        if custid not in base:
+            continue
+        last = (lastname or "").strip()
+        if last and not is_company_name(last):
+            base[custid]["candidates"].append(
+                {"first_name": (firstname or "").strip(), "last_name": last}
+            )
+
+    # ── 4. Resolve + build HotelFriend rows ───────────────────────────────
+    rows = []
+    for custid, g in base.items():
+        r = g["r"]
+        first_name, last_name = resolve_names(g["candidates"])
+        email = (r.get("EMAIL") or "").strip()
+
+        if not first_name and last_name and email:
+            derived = derive_name_from_email(email, last_name)
+            if derived:
+                first_name = derived
+
         title_raw = (r.get("SALUTATION") or "").strip().lower()
-        title = _TITLE_MAP.get(title_raw, "")
+        title  = _TITLE_MAP.get(title_raw, "")
         gender = _GENDER_MAP.get(r.get("GENDER"), "")
         if not gender:
             gender = {"mr": "1", "mrs": "2", "miss": "2"}.get(title, "")
-        last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
+
         rows.append({
-            "_hs3_id":      r.get("ID"),
-            "last_name":    last_name,
-            "first_name":   first_name,
-            "email":        (r.get("EMAIL") or "").strip(),
-            "phone":        (r.get("PHONE1") or "").strip(),
-            "country":      (r.get("COUNTRY") or "").strip(),
-            "city":         (r.get("CITY") or "").strip(),
+            "_hs3_id":       custid,
+            "last_name":     last_name,
+            "first_name":    first_name,
+            "email":         email,
+            "phone":         (r.get("PHONE1") or "").strip(),
+            "country":       (r.get("COUNTRY") or "").strip(),
+            "city":          (r.get("CITY") or "").strip(),
             "date_of_birth": _fmt_date(r.get("BIRTHDAY")),
-            "gender":       gender,
-            "title":        title,
-            "nationality":  (r.get("NATIONALITY") or "").replace("---", "").strip(),
-            "language":     lang_map.get(r.get("LANGUAGE"), ""),
+            "gender":        gender,
+            "title":         title,
+            "nationality":   (r.get("NATIONALITY") or "").replace("---", "").strip(),
+            "language":      lang_map.get(r.get("LANGUAGE"), ""),
         })
     return rows
 
