@@ -176,8 +176,10 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       S.allRows = data.rows;
       S.targetFields = [];  // not needed — rows already have HF field names
 
-      // Identity mapping: field → itself
-      const fields = S.allRows.length ? Object.keys(S.allRows[0]) : [];
+      // Identity mapping: non-meta fields only (_-prefixed are internal)
+      const fields = S.allRows.length
+        ? Object.keys(S.allRows[0]).filter(f => !f.startsWith("_"))
+        : [];
       S.mapping = Object.fromEntries(fields.map(f => [f, f]));
 
       // Validate directly and skip to screen 3a
@@ -402,8 +404,13 @@ function renderValidTable() {
   if (!S.validRows.length) { container.innerHTML = ""; return; }
   const fields = Object.keys(S.validRows[0]).filter(f => !f.startsWith("_"));
   const headers = fields.map(f => `<th class="small">${f}</th>`).join("");
+  // Map valid rows back to their original allRows entries (for meta fields like _system_changes).
+  // error_rows carry row_index; the remaining indices (in order) are the valid rows.
+  const errorIndices = new Set(S.errorRows.map(e => e.row_index));
+  const validOriginals = S.allRows.filter((_, i) => !errorIndices.has(i));
+
   const bodyRows = S.validRows.map((row, idx) => {
-    const sysChanges = row._system_changes || {};
+    const sysChanges = (validOriginals[idx] || {})._system_changes || {};
     const cells = fields.map(f => {
       const original  = String(row[f] ?? "");
       const current   = String(S.validCorrections[idx]?.[f] ?? original);
