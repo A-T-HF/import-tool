@@ -403,18 +403,26 @@ function renderValidTable() {
   const fields = Object.keys(S.validRows[0]).filter(f => !f.startsWith("_"));
   const headers = fields.map(f => `<th class="small">${f}</th>`).join("");
   const bodyRows = S.validRows.map((row, idx) => {
+    const sysChanges = row._system_changes || {};
     const cells = fields.map(f => {
-      const original = String(row[f] ?? "");
-      const current  = String(S.validCorrections[idx]?.[f] ?? original);
-      const changed  = S.validCorrections[idx]?.[f] !== undefined && S.validCorrections[idx][f] !== original;
-      const hint     = changed ? `<div class="text-muted" style="font-size:0.7em;white-space:nowrap">war: ${original || "—"}</div>` : "";
-      return `<td class="${changed ? "table-warning" : ""}">
+      const original  = String(row[f] ?? "");
+      const current   = String(S.validCorrections[idx]?.[f] ?? original);
+      const userEdit  = S.validCorrections[idx]?.[f] !== undefined && S.validCorrections[idx][f] !== original;
+      const sysChange = f in sysChanges;
+      const bgClass   = userEdit ? "table-info" : sysChange ? "table-warning" : "";
+      const hint      = userEdit
+        ? `<div class="text-muted" style="font-size:0.7em;white-space:nowrap">war: ${original || "—"}</div>`
+        : sysChange
+          ? `<div class="text-warning-emphasis" style="font-size:0.7em;white-space:nowrap">⚙ auto (war: ${sysChanges[f] || "—"})</div>`
+          : "";
+      return `<td class="${bgClass}">
         <input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent valid-edit"
           data-idx="${idx}" data-field="${f}" data-original="${original.replace(/"/g, '&quot;')}"
           value="${current.replace(/"/g, '&quot;')}">${hint}</td>`;
     }).join("");
     const rowChanged = S.validCorrections[idx] !== undefined;
-    return `<tr class="${rowChanged ? "table-warning" : ""}">${cells}</tr>`;
+    const rowSys     = Object.keys(sysChanges).length > 0;
+    return `<tr class="${rowChanged ? "table-info" : rowSys ? "table-warning" : ""}" data-sys="${rowSys ? 1 : 0}">${cells}</tr>`;
   }).join("");
   container.innerHTML = `<div class="table-responsive" style="max-height:400px;overflow-y:auto">
     <table class="table table-sm table-bordered table-hover mb-0">
@@ -431,22 +439,23 @@ function renderValidTable() {
       S.validCorrections[idx][f] = inp.value;
       // Highlight cell + show original hint live
       const td = inp.closest("td");
-      const changed = inp.value !== original;
-      td.classList.toggle("table-warning", changed);
+      const userChanged = inp.value !== original;
+      const sysChanged  = td.querySelector(".text-warning-emphasis") !== null;
+      td.classList.toggle("table-info",    userChanged);
+      td.classList.toggle("table-warning", !userChanged && sysChanged);
       let hint = td.querySelector(".text-muted");
-      if (changed) {
+      if (userChanged) {
         if (!hint) { hint = document.createElement("div"); hint.className = "text-muted"; hint.style.cssText = "font-size:0.7em;white-space:nowrap"; td.appendChild(hint); }
         hint.textContent = `war: ${original || "—"}`;
       } else {
         hint?.remove();
       }
       // Highlight row
-      inp.closest("tr").classList.toggle("table-warning",
-        Object.values(S.validCorrections[idx] || {}).some((v, i) => {
-          const inputs = inp.closest("tbody").querySelectorAll(`input[data-idx="${idx}"]`);
-          return [...inputs].some(i2 => i2.value !== i2.dataset.original);
-        })
-      );
+      const anyUserEdit = [...inp.closest("tbody").querySelectorAll(`input[data-idx="${idx}"]`)]
+        .some(i2 => i2.value !== i2.dataset.original);
+      const row = inp.closest("tr");
+      row.classList.toggle("table-info",    anyUserEdit);
+      row.classList.toggle("table-warning", !anyUserEdit && row.dataset.sys === "1");
     });
   });
 }

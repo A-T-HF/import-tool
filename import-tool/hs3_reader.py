@@ -254,26 +254,35 @@ def read_guests(con) -> list[dict]:
 
         title_raw = (r.get("SALUTATION") or "").strip().lower()
         title  = _TITLE_MAP.get(title_raw, "")
-        gender = _GENDER_MAP.get(r.get("GENDER"), "")
-        if not gender:
-            gender = {"mr": "1", "mrs": "2", "miss": "2"}.get(title, "")
+        raw_gender = _GENDER_MAP.get(r.get("GENDER"), "")
+        gender = raw_gender or {"mr": "1", "mrs": "2", "miss": "2"}.get(title, "")
+
+        raw_country = (r.get("COUNTRY") or "").strip()
+        country = _country_from_postcode(raw_country, (r.get("ZIPCODE") or "").strip())
+
+        sys = {}
+        if name_source in ("derived_from_email", "placeholder"):
+            sys["first_name"] = ""
+        if not raw_gender and gender:
+            sys["gender"] = ""
+        if country != raw_country:
+            sys["country"] = raw_country
 
         rows.append({
-            "_hs3_id":       custid,
-            "_name_source":  name_source,
-            "last_name":     last_name,
-            "first_name":    first_name,
-            "email":         email,
-            "phone":         (r.get("PHONE1") or "").strip(),
-            "country":       _country_from_postcode(
-                                 (r.get("COUNTRY") or "").strip(),
-                                 (r.get("ZIPCODE") or "").strip()),
-            "city":          (r.get("CITY") or "").strip(),
-            "date_of_birth": _fmt_date(r.get("BIRTHDAY")),
-            "gender":        gender,
-            "title":         title,
-            "nationality":   (r.get("NATIONALITY") or "").replace("---", "").strip(),
-            "language":      lang_map.get(r.get("LANGUAGE"), ""),
+            "_hs3_id":        custid,
+            "_name_source":   name_source,
+            "_system_changes": sys,
+            "last_name":      last_name,
+            "first_name":     first_name,
+            "email":          email,
+            "phone":          (r.get("PHONE1") or "").strip(),
+            "country":        country,
+            "city":           (r.get("CITY") or "").strip(),
+            "date_of_birth":  _fmt_date(r.get("BIRTHDAY")),
+            "gender":         gender,
+            "title":          title,
+            "nationality":    (r.get("NATIONALITY") or "").replace("---", "").strip(),
+            "language":       lang_map.get(r.get("LANGUAGE"), ""),
         })
     return rows
 
@@ -292,15 +301,22 @@ def read_companies(con) -> list[dict]:
     rows = []
     for raw in cur.fetchall():
         r = dict(zip(cols, raw))
-        name = (r.get("NAME1") or "").strip() or "-"
+        raw_name    = (r.get("NAME1") or "").strip()
+        name        = raw_name or "-"
+        raw_country = (r.get("COUNTRY") or "").strip()
+        country     = _country_from_postcode(raw_country, (r.get("ZIPCODE") or "").strip())
+        sys = {}
+        if not raw_name:
+            sys["name"] = ""
+        if country != raw_country:
+            sys["country"] = raw_country
         rows.append({
-            "_hs3_id":  r.get("ID"),
-            "name":     name,
-            "email":    (r.get("EMAIL") or "").strip(),
-            "phone":    (r.get("PHONE1") or "").strip(),
-            "country":  _country_from_postcode(
-                            (r.get("COUNTRY") or "").strip(),
-                            (r.get("ZIPCODE") or "").strip()),
+            "_hs3_id":         r.get("ID"),
+            "_system_changes": sys,
+            "name":            name,
+            "email":           (r.get("EMAIL") or "").strip(),
+            "phone":           (r.get("PHONE1") or "").strip(),
+            "country":         country,
             "city":     (r.get("CITY") or "").strip(),
             "address":  (r.get("STREET") or "").strip(),
             "postcode": (r.get("ZIPCODE") or "").strip(),
@@ -348,18 +364,22 @@ def read_reservations(con) -> list[dict]:
         if status_code is None:
             continue  # skip blocked/setup slots
 
-        last_name, first_name = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
-        if not first_name:
-            first_name = "-"
-        if not last_name:
-            last_name = "-"
+        raw_last, raw_first = _split_names(r.get("NAME1") or "", r.get("NAME2") or "")
+        last_name  = raw_last  or "-"
+        first_name = raw_first or "-"
+        sys = {}
+        if not raw_first:
+            sys["first_name"] = ""
+        if not raw_last:
+            sys["last_name"] = ""
         product_id = r.get("PRODUCTID")
         room_type = roomtype_map.get(product_id, str(product_id) if product_id else "")
 
         rows.append({
-            "_hs3_id":    r.get("ID"),
-            "last_name":  last_name,
-            "first_name": first_name,
+            "_hs3_id":         r.get("ID"),
+            "_system_changes": sys,
+            "last_name":       last_name,
+            "first_name":      first_name,
             "email":      (r.get("EMAIL") or "").strip(),
             "Check In":   _fmt_date(r.get("DATE_FROM")),
             "Check Out":  _fmt_date(r.get("DATE_TO")),
