@@ -1,10 +1,30 @@
 import io
 import csv
 import zipfile
+import tempfile
+import os
+from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from transformer import get_fields, suggest_mapping, transform, ENTITY_TYPES
 from hs3_reader import read_hs3
+from mews_reader import is_mews_xlsx, read_mews
+
+
+def rows_to_csv_bytes(rows: list[dict]) -> bytes:
+    if not rows:
+        return b""
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=rows[0].keys())
+    writer.writeheader()
+    writer.writerows(rows)
+    return buf.getvalue().encode("utf-8-sig")  # BOM für Excel-Kompatibilität
+
+
+def pad_to_schema(rows: list[dict], entity_type: str) -> list[dict]:
+    """Ensure every row contains all HotelFriend schema fields (missing ones → empty string)."""
+    fields = [f["name"] for f in get_fields(entity_type)]
+    return [{field: row.get(field, "") for field in fields} for row in rows]
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB (HSB-Backups bis ~30 MB)
@@ -36,6 +56,22 @@ def upload():
                 io.BytesIO(raw), sep=sep, encoding=encoding, dtype=str,
                 keep_default_na=False, on_bad_lines="skip"
             )
+        elif filename.lower().endswith(".xlsx"):
+            raw = f.read()
+            buf = io.BytesIO(raw)
+            if is_mews_xlsx(buf):
+                buf.seek(0)
+                rows = read_mews(buf, entity_type)
+                if not rows:
+                    return jsonify({"error": "Keine Datensätze gefunden."}), 400
+                return jsonify({
+                    "rows":        rows,
+                    "preview":     rows[:5],
+                    "valid_count": len(rows),
+                    "source":      "mews",
+                })
+            buf.seek(0)
+            df = pd.read_excel(buf, dtype=str, keep_default_na=False)
         else:
             df = pd.read_excel(f, dtype=str, keep_default_na=False)
     except Exception as e:
@@ -108,18 +144,14 @@ def validate():
 def download():
     data = request.get_json()
     # Strip internal meta-fields (prefixed with _) before export
+    entity_type = data.get("entity_type", "data")
     valid_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in data.get("valid_rows", [])]
     skipped_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in data.get("skipped_rows", [])]
-    entity_type = data.get("entity_type", "data")
-
-    def rows_to_csv_bytes(rows: list[dict]) -> bytes:
-        if not rows:
-            return b""
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
-        return buf.getvalue().encode("utf-8-sig")  # BOM für Excel-Kompatibilität
+    # Fill missing schema fields with empty string so HotelFriend gets the expected column structure
+    if entity_type in ENTITY_TYPES and valid_rows:
+        valid_rows = pad_to_schema(valid_rows, entity_type)
+    if entity_type in ENTITY_TYPES and skipped_rows:
+        skipped_rows = pad_to_schema(skipped_rows, entity_type)
 
     if len(valid_rows) <= 100:
         csv_bytes = rows_to_csv_bytes(valid_rows)
@@ -145,6 +177,80 @@ def download():
         as_attachment=True,
         download_name=f"{entity_type}_import.zip",
     )
+
+@app.route("/download_all", methods=["POST"])
+def download_all():
+    """
+    Upload a single HS3 or Mews file and get a ZIP with valid CSVs
+    for all three entity types (guests, companies, reservations).
+    """
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "Keine Datei"}), 400
+
+    filename = f.filename or ""
+    suffix = Path(filename).suffix.lower()
+
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        f.save(tmp.name)
+        tmp.close()
+
+        if suffix in (".hsb", ".fdb"):
+            def reader(et):
+                return read_hs3(tmp.name, et)
+        elif suffix == ".xlsx":
+            with open(tmp.name, "rb") as fh:
+                raw = fh.read()
+            if not is_mews_xlsx(io.BytesIO(raw)):
+                return jsonify({"error": "XLSX ist kein Mews Reservierungsbericht"}), 400
+            def reader(et):
+                return read_mews(io.BytesIO(raw), et)
+        else:
+            return jsonify({"error": "Nur HS3 (.hsb/.fdb) und Mews (.xlsx) werden unterstützt"}), 400
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for entity_type in ENTITY_TYPES:
+                rows = reader(entity_type)
+                if not rows:
+                    continue
+                fields = [k for k in rows[0] if not k.startswith("_")]
+                mapping = {field: field for field in fields}
+                result = transform(rows, entity_type, mapping)
+
+                valid_clean = pad_to_schema(
+                    [{k: v for k, v in r.items() if not k.startswith("_")} for r in result.valid_rows],
+                    entity_type,
+                )
+                if valid_clean:
+                    zf.writestr(
+                        f"{entity_type}_valid.csv",
+                        rows_to_csv_bytes(valid_clean).decode("utf-8-sig"),
+                    )
+
+                if result.error_rows:
+                    err_rows = []
+                    for e in result.error_rows:
+                        row = {k: v for k, v in e["row_data"].items() if not k.startswith("_")}
+                        row["fehler"] = "; ".join(e["errors"])
+                        err_rows.append(row)
+                    zf.writestr(
+                        f"{entity_type}_fehler.csv",
+                        rows_to_csv_bytes(err_rows).decode("utf-8-sig"),
+                    )
+
+        zip_buf.seek(0)
+        stem = Path(filename).stem
+        return send_file(
+            zip_buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"{stem}_alle.zip",
+        )
+    finally:
+        os.unlink(tmp.name)
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5050)

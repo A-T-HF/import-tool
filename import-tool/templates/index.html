@@ -50,7 +50,10 @@
       </div>
     </div>
     <div id="uploadError" class="alert alert-danger d-none"></div>
-    <button id="btnUpload" class="btn btn-primary" disabled>Weiter →</button>
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="btnUpload" class="btn btn-primary" disabled>Weiter →</button>
+      <button id="btnDownloadAll" class="btn btn-outline-success d-none" type="button">Alle Typen exportieren ↓</button>
+    </div>
   </div>
 
   <!-- Screen 2: Column Mapping -->
@@ -88,6 +91,7 @@
       <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
+      <button id="btnDownloadAll3a" class="btn btn-outline-success d-none" type="button">Alle Typen exportieren ↓</button>
     </div>
   </div>
 
@@ -107,6 +111,7 @@
 // ── State ──────────────────────────────────────────────────────────
 const S = {
   entityType: "guest",
+  source: "csv",        // "csv" | "hs3" | "mews"
   allRows: [],
   columns: [],
   preview: [],
@@ -127,6 +132,9 @@ function showScreen(n) {
   document.getElementById(id).classList.add("active");
   const labels = {1:"Schritt 1 von 4",2:"Schritt 2 von 4","3a":"Schritt 3 von 4","3b":"Schritt 4 von 4"};
   document.getElementById("stepBadge").textContent = labels[n] || "";
+  // Show "Alle Typen" button on 3a for pre-mapped sources (HS3 / Mews)
+  const isPreMapped = S.source === "hs3" || S.source === "mews";
+  document.getElementById("btnDownloadAll3a").classList.toggle("d-none", !(n === "3a" && isPreMapped));
 }
 
 // ── Screen 1: Upload ───────────────────────────────────────────────
@@ -149,6 +157,8 @@ function handleFile(file) {
   document.getElementById("btnUpload").disabled = false;
   const isHs3 = file.name.toLowerCase().endsWith(".hsb") || file.name.toLowerCase().endsWith(".fdb");
   document.getElementById("hs3Badge").classList.toggle("d-none", !isHs3);
+  // Show "Alle Typen" button immediately for HS3 (Mews XLSX needs server-side detection)
+  document.getElementById("btnDownloadAll").classList.toggle("d-none", !isHs3);
 }
 
 document.getElementById("btnUpload").addEventListener("click", async () => {
@@ -173,6 +183,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
 
+      S.source = "hs3";
       S.allRows = data.rows;
       S.targetFields = [];  // not needed — rows already have HF field names
 
@@ -190,19 +201,35 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
 
-      S.allRows = data.all_rows;
-      S.columns = data.columns;
-      S.preview = data.preview;
-      S.targetFields = data.target_fields;
+      if (data.source === "mews") {
+        // Mews direct import — pre-mapped, skip column mapping
+        S.source = "mews";
+        S.allRows = data.rows;
+        S.targetFields = [];
 
-      // Apply suggestions as default mapping
-      S.mapping = {};
-      for (const [col, suggestion] of Object.entries(data.suggestions)) {
-        S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+        const fields = S.allRows.length
+          ? Object.keys(S.allRows[0]).filter(f => !f.startsWith("_"))
+          : [];
+        S.mapping = Object.fromEntries(fields.map(f => [f, f]));
+
+        await validateAndShowErrors(S.allRows);
+        showScreen("3a");
+      } else {
+        S.source = "csv";
+        S.allRows = data.all_rows;
+        S.columns = data.columns;
+        S.preview = data.preview;
+        S.targetFields = data.target_fields;
+
+        // Apply suggestions as default mapping
+        S.mapping = {};
+        for (const [col, suggestion] of Object.entries(data.suggestions)) {
+          S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+        }
+
+        buildMappingTable();
+        showScreen(2);
       }
-
-      buildMappingTable();
-      showScreen(2);
     }
   } catch (e) {
     errEl.textContent = e.message;
@@ -482,19 +509,23 @@ document.getElementById("btnToggleValid").addEventListener("click", () => {
 
 // Back button on 3a: go to mapping (CSV) or upload (HS3)
 document.getElementById("btnBack3a").addEventListener("click", () => {
-  const isHs3 = selectedFile && (selectedFile.name.toLowerCase().endsWith(".hsb") ||
-                                  selectedFile.name.toLowerCase().endsWith(".fdb"));
-  showScreen(isHs3 ? 1 : 2);
+  // Reset valid table toggle state
+  const vt = document.getElementById("validTable");
+  const btnToggle = document.getElementById("btnToggleValid");
+  vt.style.display = "none";
+  vt.innerHTML = "";
+  btnToggle.textContent = "Alle Zeilen anzeigen & bearbeiten ▾";
+  S.validCorrections = {};
+
+  showScreen(S.source === "csv" ? 2 : 1);
 });
 
 document.getElementById("btnRevalidate").addEventListener("click", async () => {
   // Apply corrections back into rows
-  const isHs3 = selectedFile && (selectedFile.name.toLowerCase().endsWith(".hsb") ||
-                                   selectedFile.name.toLowerCase().endsWith(".fdb"));
   const correctedRows = S.allRows.map((row, i) => {
     if (!S.corrections[i]) return row;
     const corrected = { ...row };
-    if (isHs3) {
+    if (S.source !== "csv") {
       // Rows already use HF field names — apply corrections directly
       Object.assign(corrected, S.corrections[i]);
     } else {
@@ -557,6 +588,39 @@ document.getElementById("btnDoDownload").addEventListener("click", async () => {
   } finally {
     btn.disabled = false; btn.textContent = "CSV herunterladen ↓";
   }
+});
+
+// ── Alle Typen exportieren ──────────────────────────────────────────
+async function downloadAll(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Wird erstellt…";
+  try {
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    const res = await fetch("/download_all", { method: "POST", body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || `Fehler ${res.status}`);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = selectedFile.name.replace(/\.[^.]+$/, "_alle.zip");
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+document.getElementById("btnDownloadAll").addEventListener("click", function() {
+  downloadAll(this);
+});
+
+document.getElementById("btnDownloadAll3a").addEventListener("click", function() {
+  downloadAll(this);
 });
 </script>
 </body>
