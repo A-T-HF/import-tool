@@ -233,7 +233,7 @@ def download_all():
                     err_rows = []
                     for e in result.error_rows:
                         row = {k: v for k, v in e["row_data"].items() if not k.startswith("_")}
-                        row["fehler"] = "; ".join(e["errors"])
+                        row["fehler"] = "; ".join(f'{err["field"]}: {err["reason"]}' for err in e["errors"])
                         err_rows.append(row)
                     zf.writestr(
                         f"{entity_type}_fehler.csv",

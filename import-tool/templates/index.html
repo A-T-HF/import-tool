@@ -328,10 +328,18 @@ function renderErrorScreen() {
     </div>`;
   }
 
+  const mewsHint = (S.source === "mews") ? `
+    <div class="mt-2 small text-muted border-top pt-2">
+      ℹ️ Mews-Quelle: Der <em>Reservierungsbericht</em> enthält nur Buchungsdaten.
+      Für vollständige Gastprofile (Adresse, Geburtsdatum, Ausweisdaten) bitte zusätzlich
+      den <strong>Kundenbericht</strong> aus Mews exportieren und als CSV importieren.
+    </div>` : "";
+
   summary.innerHTML = `
     <strong>${S.validRows.length} von ${total} Zeilen korrekt.</strong>
     ${S.errorRows.length > 0 ? ` <span class="text-danger">${S.errorRows.length} Zeile(n) mit Fehlern.</span>` : ""}
     ${nameSourceHtml}
+    ${mewsHint}
   `;
 
   const container = document.getElementById("errorTable");

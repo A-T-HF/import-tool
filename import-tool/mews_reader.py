@@ -176,14 +176,23 @@ def _group_display_name(gruppenname) -> str:
 # ── Sheet loading ─────────────────────────────────────────────────────────────
 
 def _load_rows(file_or_path) -> list[dict]:
-    """Load 'Reservierungen' sheet and return list of row dicts."""
+    """Load 'Reservierungen' sheet and return list of row dicts.
+    Skips footer/summary rows (e.g. Mews appends a 'Gesamtbetrag' totals row).
+    """
     wb = openpyxl.load_workbook(file_or_path, read_only=True, data_only=True)
     ws = wb["Reservierungen"]
     raw = list(ws.iter_rows(values_only=True))
     if not raw:
         return []
     headers = [str(h) if h is not None else "" for h in raw[0]]
-    return [dict(zip(headers, row)) for row in raw[1:]]
+    rows = []
+    for row in raw[1:]:
+        # Skip rows where the first cell is not a reservation number (summary/footer rows)
+        first = str(row[0]).strip() if row[0] is not None else ""
+        if not first.isdigit():
+            continue
+        rows.append(dict(zip(headers, row)))
+    return rows
 
 
 # ── Guest extraction ──────────────────────────────────────────────────────────
@@ -218,17 +227,33 @@ def _read_guests(rows: list[dict]) -> list[dict]:
             continue
         seen[key] = True
 
+        sys: dict = {}
+        raw_first = _parse_person_name(row.get("Nachname"), row.get("Vorname"))[0].strip()
+
+        if name_source == "derived_from_email":
+            sys["first_name"] = ""          # original: no first name
+        elif not first:
+            sys["first_name"] = ""          # placeholder "-" auto-set
+
+        if not last:
+            sys["last_name"] = ""           # placeholder "-" auto-set
+
+        nat_raw = _clean(row.get("Staatsangehörigkeit des Gastes"))
+        nat = _map_nationality(nat_raw)
+        if nat:
+            sys["nationality"] = nat_raw    # original: German name → mapped to ISO
+
         g: dict = {
-            "first_name":   first or "-",
-            "last_name":    last  or "-",
-            "_name_source": name_source,
+            "first_name":      first or "-",
+            "last_name":       last  or "-",
+            "_name_source":    name_source,
+            "_system_changes": sys,
         }
         if email:
             g["email"] = email
         phone = _clean(row.get("Telefon"))
         if phone:
             g["phone"] = phone
-        nat = _map_nationality(row.get("Staatsangehörigkeit des Gastes"))
         if nat:
             g["nationality"] = nat
         mews_id = _clean(row.get("Kennung"))
@@ -269,9 +294,13 @@ def _read_companies(rows: list[dict]) -> list[dict]:
             continue
         display = _group_display_name(gname)
         if display and display not in companies:
+            sys: dict = {}
+            if display != gname:                # suffix was stripped
+                sys["name"] = gname
             companies[display] = {
-                "name":     display,
-                "_mews_id": _clean(glist[0].get("Kennung")) or None,
+                "name":            display,
+                "_mews_id":        _clean(glist[0].get("Kennung")) or None,
+                "_system_changes": sys,
             }
 
     return [{k: v for k, v in c.items() if v} for c in companies.values()]
@@ -282,14 +311,28 @@ def _read_companies(rows: list[dict]) -> list[dict]:
 def _read_reservations(rows: list[dict]) -> list[dict]:
     result = []
     for row in rows:
-        first, last = _parse_person_name(row.get("Nachname"), row.get("Vorname"))
+        raw_nachname = _clean(row.get("Nachname"))
+        raw_vorname  = _clean(row.get("Vorname"))
+        first, last  = _parse_person_name(raw_nachname, raw_vorname)
+        first, last  = first.strip(), last.strip()
+
+        sys: dict = {}
+        # Name was split out of compound "Company, Person Name" Nachname
+        if "," in raw_nachname and raw_vorname:
+            sys["first_name"] = raw_nachname
+        elif not first:
+            sys["first_name"] = ""          # placeholder "-"
+        if not last:
+            sys["last_name"] = ""           # placeholder "-"
+
         r: dict = {
-            "first_name": first.strip() or "-",
-            "last_name":  last.strip()  or "-",
-            "Check In":   _fmt_date(row.get("Anreise")),
-            "Check Out":  _fmt_date(row.get("Abreise")),
-            "Zimmer":     _clean(row.get("Raumnummer")),
-            "Zimmertyp":  _clean(row.get("Raumkategorie")),
+            "first_name":      first or "-",
+            "last_name":       last  or "-",
+            "Check In":        _fmt_date(row.get("Anreise")),
+            "Check Out":       _fmt_date(row.get("Abreise")),
+            "Zimmer":          _clean(row.get("Raumnummer")),
+            "Zimmertyp":       _clean(row.get("Raumkategorie")),
+            "_system_changes": sys,
         }
         email = _clean(row.get("E-Mail"))
         if email:
