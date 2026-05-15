@@ -85,6 +85,33 @@ def test_title_miss_variants():
 def test_title_unknown():
     assert transform_title("Prof.") is None
 
+# --- Gender-Ableitung aus Title ---
+def _guest_row(title="", gender="", email="test@example.com"):
+    row = {"first_name": "Max", "last_name": "Müller", "email": email,
+           "title": title, "gender": gender}
+    mapping = {k: k for k in row}
+    return transform([row], "guest", mapping).valid_rows
+
+def test_gender_derived_from_mr():
+    rows = _guest_row(title="mr")
+    assert rows[0]["gender"] == "1"
+
+def test_gender_derived_from_mrs():
+    rows = _guest_row(title="mrs")
+    assert rows[0]["gender"] == "2"
+
+def test_gender_derived_from_miss():
+    rows = _guest_row(title="miss")
+    assert rows[0]["gender"] == "2"
+
+def test_gender_explicit_takes_priority():
+    rows = _guest_row(title="mr", gender="2")
+    assert rows[0]["gender"] == "2"
+
+def test_gender_not_derived_without_title():
+    rows = _guest_row(title="", gender="")
+    assert rows[0].get("gender", "") == ""
+
 # --- Reservierungsstatus ---
 def test_status_new_variants():
     for v in ["neu", "new", "Neu"]:

@@ -272,6 +272,14 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 if err:
                     errors.append({"field": fname, "reason": err})
 
+        # Derive gender from title when gender is missing (guests only)
+        if entity_type == "guest" and not mapped.get("gender"):
+            title = mapped.get("title", "").lower()
+            if title == "mr":
+                mapped["gender"] = "1"
+            elif title in ("mrs", "miss"):
+                mapped["gender"] = "2"
+
         # Duplicate email check (guests only)
         if entity_type == "guest":
             email = mapped.get("email", "")
