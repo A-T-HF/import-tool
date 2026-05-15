@@ -95,6 +95,7 @@ _COUNTRY_MAP = {
     "griechenland": "GR", "portugal": "PT", "schweden": "SE",
     "norwegen": "NO", "dänemark": "DK", "finnland": "FI",
     "großbritannien": "GB", "vereinigtes königreich": "GB",
+    "vereinigtes königreich großbritannien und nordirland": "GB",
     "usa": "US", "vereinigte staaten": "US", "vereinigte staaten von amerika": "US",
     "china": "CN", "japan": "JP", "australien": "AU", "kanada": "CA",
     "rumänien": "RO", "bulgarien": "BG", "kroatien": "HR",
