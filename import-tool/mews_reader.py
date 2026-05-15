@@ -185,12 +185,20 @@ def _load_rows(file_or_path) -> list[dict]:
     if not raw:
         return []
     headers = [str(h) if h is not None else "" for h in raw[0]]
+    # Find Anreise column index to filter companion/address sub-rows
+    anreise_idx = headers.index("Anreise") if "Anreise" in headers else -1
     rows = []
     for row in raw[1:]:
         # Skip rows where the first cell is not a reservation number (summary/footer rows)
         first = str(row[0]).strip() if row[0] is not None else ""
         if not first.isdigit():
             continue
+        # Skip companion/address sub-rows: openpyxl returns real dates as datetime objects.
+        # If Anreise is a non-empty string it's not a booking row (e.g. guest address data).
+        if anreise_idx >= 0:
+            anreise_val = row[anreise_idx]
+            if anreise_val is not None and not isinstance(anreise_val, (date, datetime)):
+                continue
         rows.append(dict(zip(headers, row)))
     return rows
 
