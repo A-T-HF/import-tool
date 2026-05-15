@@ -135,6 +135,7 @@
     <div class="d-flex gap-2 mt-3">
       <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
       <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
+      <button id="btnClearDupEmails" class="btn btn-outline-warning d-none">Duplikat-E-Mails löschen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
       <button id="btnDownloadAll3a" class="btn btn-outline-success d-none" type="button">Alle Typen exportieren ↓</button>
@@ -479,11 +480,15 @@ function renderErrorScreen() {
 
   document.getElementById("btnDownload").classList.add("d-none");
 
-  // Show bulk-skip buttons
+  // Show bulk-skip / bulk-fix buttons
   const emailOnlyErrors = S.errorRows.filter(r =>
     r.errors.every(e => e.field === "email")
   );
+  const dupEmailErrors = S.errorRows.filter(r =>
+    r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))
+  );
   document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
+  document.getElementById("btnClearDupEmails").classList.toggle("d-none", dupEmailErrors.length === 0);
 
 }
 
@@ -494,6 +499,33 @@ document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
   const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
   document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
   renderErrorScreen();
+});
+
+document.getElementById("btnClearDupEmails").addEventListener("click", async () => {
+  // Clear email field on all duplicate-email rows, then re-validate
+  S.errorRows.forEach(r => {
+    if (r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))) {
+      if (!S.corrections[r.row_index]) S.corrections[r.row_index] = {};
+      S.corrections[r.row_index]["email"] = "";
+    }
+  });
+  // Trigger re-validate (same logic as btnRevalidate)
+  const correctedRows = S.allRows.map((row, i) => {
+    if (!S.corrections[i]) return row;
+    const corrected = { ...row };
+    if (S.source !== "csv") {
+      Object.assign(corrected, S.corrections[i]);
+    } else {
+      for (const [srcCol, targetField] of Object.entries(S.mapping)) {
+        if (S.corrections[i]?.[targetField] !== undefined) corrected[srcCol] = S.corrections[i][targetField];
+      }
+    }
+    return corrected;
+  });
+  S.corrections = {};
+  S.validCorrections = {};
+  S.skipped = new Set();
+  await validateAndShowErrors(applyZimmerMapping(correctedRows));
 });
 
 function renderValidTable() {
