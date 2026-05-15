@@ -79,15 +79,36 @@
   <div id="screen4" class="screen card shadow-sm p-4">
     <h2 class="h5 mb-1">Zimmerzuordnung</h2>
     <p class="text-muted small mb-3">
-      Ordne die Zimmernamen aus der Importdatei den Zimmern in HotelFriend zu.
+      Ordne Zimmer und Zimmertypen aus der Importdatei den Werten in HotelFriend zu.
       Leer lassen = Originalwert wird unverändert übernommen.
     </p>
-    <div class="table-responsive">
+
+    <!-- HotelFriend Zimmerliste einfügen -->
+    <div class="card bg-light border-0 mb-4 p-3">
+      <div class="fw-semibold small mb-1">Zimmerliste aus HotelFriend einfügen <span class="text-muted fw-normal">(optional — für automatische Zuordnung)</span></div>
+      <p class="text-muted small mb-2">Kopiere die Zimmerliste aus HotelFriend (Tabelle markieren → Strg+C) und füge sie hier ein.</p>
+      <textarea id="hfRoomPaste" class="form-control form-control-sm font-monospace mb-2"
+        rows="4" placeholder="Hier einfügen (Strg+V)…" spellcheck="false"></textarea>
+      <button class="btn btn-outline-primary btn-sm" id="btnParseHFRooms" type="button">Einlesen & Zuordnung vorausfüllen</button>
+      <div id="hfRoomParseInfo" class="mt-2 small text-muted d-none"></div>
+    </div>
+
+    <h6 class="fw-semibold">Zimmer</h6>
+    <div class="table-responsive mb-4">
       <table class="table table-sm table-bordered">
         <thead class="table-light">
           <tr><th>Zimmer (Quelle)</th><th>→ Zimmername in HotelFriend</th></tr>
         </thead>
         <tbody id="zimmerMappingTable"></tbody>
+      </table>
+    </div>
+    <h6 class="fw-semibold">Zimmertyp</h6>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm table-bordered">
+        <thead class="table-light">
+          <tr><th>Zimmertyp (Quelle)</th><th>→ Zimmertyp in HotelFriend</th></tr>
+        </thead>
+        <tbody id="zimmerTypMappingTable"></tbody>
       </table>
     </div>
     <div class="d-flex gap-2">
@@ -134,6 +155,8 @@ const S = {
   entityType: "guest",
   source: "csv",        // "csv" | "hs3" | "mews"
   zimmerMapping: {},    // {sourceZimmerName: hfZimmerName}
+  zimmerTypMapping: {}, // {sourceZimmertyp: hfZimmertyp}
+  hfRooms: [],          // [{name, type}] parsed from HotelFriend room list paste
   allRows: [],
   columns: [],
   preview: [],
@@ -665,45 +688,201 @@ async function downloadAll(btn) {
 }
 
 // ── Screen 4: Zimmerzuordnung ───────────────────────────────────────
-function _zimmerSrcCol() {
-  // For CSV: find source column mapped to "Zimmer"; for HS3/Mews: field is "Zimmer" directly
+function _srcColFor(hfField) {
+  // For CSV: find source column mapped to hfField; for HS3/Mews: field name is used directly
   return S.source === "csv"
-    ? (Object.keys(S.mapping).find(k => S.mapping[k] === "Zimmer") || "Zimmer")
-    : "Zimmer";
+    ? (Object.keys(S.mapping).find(k => S.mapping[k] === hfField) || hfField)
+    : hfField;
 }
 
+const _PLACEHOLDER = /^(-|—|keine angabe|n\/a|unbekannt|nicht angegeben|none|null|undefined)$/i;
+
 function applyZimmerMapping(rows) {
-  const zm = S.zimmerMapping;
-  if (!Object.keys(zm).length) return rows;
-  const col = _zimmerSrcCol();
-  return rows.map(row => {
-    const val = row[col] ?? "";
-    if (val in zm && zm[val] !== "") {
-      return { ...row, [col]: zm[val] };
-    }
+  let result = rows;
+  const zimCol = _srcColFor("Zimmer");
+  const typCol = _srcColFor("Zimmertyp");
+
+  // Blank out placeholder values in Zimmer (field is optional — HF handles unallocated bookings)
+  result = result.map(row => {
+    const val = (row[zimCol] ?? "").trim();
+    if (_PLACEHOLDER.test(val)) return { ...row, [zimCol]: "" };
     return row;
+  });
+
+  if (Object.keys(S.zimmerMapping).length) {
+    result = result.map(row => {
+      const val = row[zimCol] ?? "";
+      if (val in S.zimmerMapping && S.zimmerMapping[val] !== "") {
+        return { ...row, [zimCol]: S.zimmerMapping[val] };
+      }
+      return row;
+    });
+  }
+  if (Object.keys(S.zimmerTypMapping).length) {
+    result = result.map(row => {
+      const val = row[typCol] ?? "";
+      if (val in S.zimmerTypMapping && S.zimmerTypMapping[val] !== "") {
+        return { ...row, [typCol]: S.zimmerTypMapping[val] };
+      }
+      return row;
+    });
+  }
+  return result;
+}
+
+// ── HotelFriend room list parser ────────────────────────────────────
+function parseHFRoomList(text) {
+  // Format copied from HotelFriend rooms table:
+  // header line(s) → then per room: name-line / area+TAB+type / status-line
+  const lines = text.split(/\r?\n/);
+  const rooms = [];
+
+  // Skip header rows (contain "Name", "Area", "Type", "Status" etc.)
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i].replace(/\t/g, " ").trim().toLowerCase();
+    if (l.includes("name") || l.includes("area") || l.includes("floor") || l.includes("status") || l === "") {
+      i++; continue;
+    }
+    break;
+  }
+
+  while (i < lines.length) {
+    const nameLine = lines[i].trim();
+    if (!nameLine) { i++; continue; }
+
+    // Check if next line is tab-separated (area\ttype\t...)
+    const nextLine = (lines[i + 1] || "").trim();
+    const afterLine = (lines[i + 2] || "").trim();
+
+    if (nextLine.includes("\t")) {
+      const parts = nextLine.split("\t").map(p => p.trim());
+      // parts[0] = area ("16 sq.m."), parts[1] = type ("Doppelzimmer (Double)")
+      const type = parts.find(p => p && !p.includes("sq.m.") && !/^active$/i.test(p)) || "";
+      if (type) rooms.push({ name: nameLine, type });
+      // skip name + data + optional status line
+      i += /^active$/i.test(afterLine) ? 3 : 2;
+    } else {
+      // Might be a tab-separated single-line format: name\tarea\ttype\t...
+      const cols = nameLine.split("\t").map(c => c.trim());
+      if (cols.length >= 3) {
+        rooms.push({ name: cols[0], type: cols[2] });
+      }
+      i++;
+    }
+  }
+  return rooms;
+}
+
+function _autoMatch(source, options) {
+  if (!options.length) return "";
+  const s = source.trim().toLowerCase();
+  // 1. Exact match
+  const exact = options.find(o => o.toLowerCase() === s);
+  if (exact) return exact;
+  // 2. Option starts with source (e.g. "Einzelzimmer" → "Einzelzimmer (Single)")
+  const fwd = options.find(o => o.toLowerCase().startsWith(s));
+  if (fwd) return fwd;
+  // 3. Source starts with option
+  const rev = options.find(o => s.startsWith(o.toLowerCase()));
+  if (rev) return rev;
+  // 4. Shared leading words (e.g. "Doppelzimmer Balkon" vs "Doppelzimmer mit Balkon (Double)")
+  const srcWords = s.split(/\s+/).filter(w => w.length > 3);
+  if (srcWords.length) {
+    const wordMatch = options.find(o => {
+      const oLower = o.toLowerCase();
+      return srcWords.every(w => oLower.includes(w));
+    });
+    if (wordMatch) return wordMatch;
+    // At least half the words match
+    const partial = options.find(o => {
+      const oLower = o.toLowerCase();
+      const hits = srcWords.filter(w => oLower.includes(w));
+      return hits.length >= Math.ceil(srcWords.length / 2);
+    });
+    if (partial) return partial;
+  }
+  return "";
+}
+
+function _buildMappingSubTable(tbodyId, stateKey, srcRows, srcCol, hfOptions) {
+  const _SKIP = /^(-|—|keine angabe|n\/a|unbekannt|nicht angegeben|none|null|undefined)$/i;
+  const unique = [...new Set(
+    srcRows.map(r => (r[srcCol] ?? "").trim()).filter(v => v && !_SKIP.test(v))
+  )].sort();
+  const tbody = document.getElementById(tbodyId);
+  const listId = tbodyId + "DL";
+
+  const datalist = hfOptions.length
+    ? `<datalist id="${listId}">${hfOptions.map(o => `<option value="${o.replace(/"/g, '&quot;')}">`).join("")}</datalist>`
+    : "";
+
+  tbody.innerHTML = datalist + unique.map(z => {
+    const auto   = _autoMatch(z, hfOptions);
+    const stored = S[stateKey][z];
+    const val    = stored !== undefined ? stored : auto;
+    // Visual state: confirmed (in HF list), remapped (auto ≠ source), no-match
+    const inHF     = hfOptions.length && hfOptions.some(o => o.toLowerCase() === (val || z).toLowerCase());
+    const remapped = auto && auto.toLowerCase() !== z.toLowerCase();
+    const noMatch  = hfOptions.length && !auto;
+    const hint = noMatch
+      ? `<div class="text-danger" style="font-size:0.7em">⚠ kein Treffer in HotelFriend-Liste</div>`
+      : remapped
+        ? `<div class="text-success" style="font-size:0.7em">⚙ automatisch zugeordnet</div>`
+        : inHF
+          ? `<div class="text-success" style="font-size:0.7em">✓ in HotelFriend gefunden</div>`
+          : "";
+    const borderClass = noMatch ? " border-warning" : (inHF || remapped) ? " border-success" : "";
+    return `<tr>
+      <td class="fw-semibold align-middle">${z}</td>
+      <td>
+        <input type="text" class="form-control form-control-sm${borderClass}"
+          data-source="${z.replace(/"/g, '&quot;')}"
+          ${hfOptions.length ? `list="${listId}"` : ""}
+          value="${val.replace(/"/g, '&quot;')}"
+          placeholder="${z.replace(/"/g, '&quot;')}">
+        ${hint}
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Sync initial auto-matches into state
+  tbody.querySelectorAll("input[data-source]").forEach(inp => {
+    const src = inp.dataset.source;
+    if (S[stateKey][src] === undefined && inp.value) S[stateKey][src] = inp.value;
+    inp.addEventListener("input", () => { S[stateKey][src] = inp.value; });
   });
 }
 
 function buildZimmerScreen() {
-  const col = _zimmerSrcCol();
-  const unique = [...new Set(S.allRows.map(r => (r[col] ?? "").trim()).filter(Boolean))].sort();
-  const tbody = document.getElementById("zimmerMappingTable");
-  tbody.innerHTML = unique.map(z => `<tr>
-    <td class="fw-semibold align-middle">${z}</td>
-    <td>
-      <input type="text" class="form-control form-control-sm zimmer-map-input"
-        data-source="${z.replace(/"/g, '&quot;')}"
-        value="${(S.zimmerMapping[z] ?? "").replace(/"/g, '&quot;')}"
-        placeholder="${z.replace(/"/g, '&quot;')}">
-    </td>
-  </tr>`).join("");
-  tbody.querySelectorAll(".zimmer-map-input").forEach(inp => {
-    inp.addEventListener("input", () => {
-      S.zimmerMapping[inp.dataset.source] = inp.value;
-    });
-  });
+  const hfNames = [...new Set(S.hfRooms.map(r => r.name))].sort();
+  const hfTypes = [...new Set(S.hfRooms.map(r => r.type))].sort();
+  _buildMappingSubTable("zimmerMappingTable",    "zimmerMapping",    S.allRows, _srcColFor("Zimmer"),    hfNames);
+  _buildMappingSubTable("zimmerTypMappingTable", "zimmerTypMapping", S.allRows, _srcColFor("Zimmertyp"), hfTypes);
 }
+
+document.getElementById("btnParseHFRooms").addEventListener("click", () => {
+  const text = document.getElementById("hfRoomPaste").value;
+  const rooms = parseHFRoomList(text);
+  const info  = document.getElementById("hfRoomParseInfo");
+  if (!rooms.length) {
+    info.innerHTML = "Keine Zimmer erkannt. Bitte prüfe das Format.";
+    info.className = "mt-2 small text-danger";
+  } else {
+    const names = [...new Set(rooms.map(r => r.name))].sort();
+    const types = [...new Set(rooms.map(r => r.type))].sort();
+    info.innerHTML = `<strong>${rooms.length} Zimmer erkannt, ${types.length} Zimmertyp(en).</strong><br>
+      <span class="text-muted">Zimmer: ${names.join(", ")}</span><br>
+      <span class="text-muted">Typen: ${types.join(" · ")}</span>`;
+    info.className = "mt-2 small text-success";
+    // Reset mappings so auto-match can re-run cleanly
+    S.hfRooms = rooms;
+    S.zimmerMapping = {};
+    S.zimmerTypMapping = {};
+    buildZimmerScreen();
+  }
+  info.classList.remove("d-none");
+});
 
 document.getElementById("btnBackZimmer").addEventListener("click", () => {
   showScreen(S.source === "csv" ? 2 : 1);

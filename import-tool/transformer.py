@@ -46,7 +46,7 @@ _RESERVATION_FIELDS = [
     {"name": "email",      "required": False, "transformer": None,   "validator": "email"},
     {"name": "Check In",   "required": True,  "transformer": "date", "validator": None},
     {"name": "Check Out",  "required": True,  "transformer": "date", "validator": None},
-    {"name": "Zimmer",     "required": True,  "transformer": None,   "validator": None},
+    {"name": "Zimmer",     "required": False, "transformer": None,   "validator": None},
     {"name": "Zimmertyp",  "required": True,  "transformer": None,   "validator": None},
     {"name": "Summe",      "required": False, "transformer": "amount", "validator": None},
     {"name": "Status",     "required": False, "transformer": "reservation_status", "validator": None},
