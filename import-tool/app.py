@@ -76,6 +76,18 @@ def upload():
                 })
             buf.seek(0)
             df = pd.read_excel(buf, dtype=str, keep_default_na=False)
+        elif filename.lower().endswith(".txt"):
+            raw = f.read()
+            try:
+                sample = raw[:2048].decode("utf-8-sig")
+            except UnicodeDecodeError:
+                sample = raw[:2048].decode("cp1252", errors="replace")
+            encoding = "utf-8-sig" if "Ã" not in sample else "cp1252"
+            sep = ";" if sample.count(";") > sample.count(",") else ","
+            df = pd.read_csv(
+                io.BytesIO(raw), sep=sep, encoding=encoding, dtype=str,
+                keep_default_na=False, on_bad_lines="skip"
+            )
         else:
             df = pd.read_excel(f, dtype=str, keep_default_na=False)
     except Exception as e:

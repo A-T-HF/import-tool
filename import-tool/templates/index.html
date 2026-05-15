@@ -251,12 +251,12 @@
       <div class="form-group">
         <label>Datei</label>
         <div class="drop-zone" id="dropZone">
-          <p>CSV, XLS, XLSX oder HS3-Backup (.hsb) hierher ziehen</p>
+          <p>CSV, TXT, XLS, XLSX oder HS3-Backup (.hsb) hierher ziehen</p>
           <p style="font-size:12px;margin-bottom:12px">oder</p>
           <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInput').click()">
             Datei auswählen
           </button>
-          <input type="file" id="fileInput" accept=".csv,.xls,.xlsx,.hsb,.fdb">
+          <input type="file" id="fileInput" accept=".csv,.txt,.xls,.xlsx,.hsb,.fdb">
           <p id="fileName" style="margin-top:10px;font-size:12px"></p>
           <p id="hs3Badge" class="d-none" style="margin-top:6px">
             <span class="badge badge-info">HS3 Direktimport — Spaltenzuordnung wird übersprungen</span>
@@ -276,6 +276,9 @@
       <p class="muted" style="margin-bottom:16px">Ordne jede Quellspalte einem HotelFriend-Feld zu. Pflichtfelder sind rot markiert.</p>
       <div id="mappingWarning" class="alert alert-warning d-none">
         Nicht alle Pflichtfelder sind zugeordnet.
+      </div>
+      <div id="customFieldHint" class="alert alert-info d-none" style="margin-bottom:12px">
+        Felder, die hier nicht aufgelistet sind (z.&nbsp;B. benutzerdefinierte Sonderfelder), müssen zuerst in HotelFriend unter <strong>Einstellungen → Gäste → Sonderfelder</strong> angelegt werden — erst dann können sie beim Import zugeordnet werden.
       </div>
       <div class="table-wrap">
         <table>
@@ -538,9 +541,18 @@ function buildMappingTable() {
     sel.addEventListener("change", () => {
       S.mapping[sel.dataset.col] = sel.value;
       checkRequiredMapped();
+      updateCustomFieldHint();
     });
   });
   checkRequiredMapped();
+  updateCustomFieldHint();
+}
+
+function updateCustomFieldHint() {
+  const hint = document.getElementById("customFieldHint");
+  if (S.entityType !== "guest") { hint.classList.add("d-none"); return; }
+  const hasIgnored = Object.values(S.mapping).some(v => v === "_ignore");
+  hint.classList.toggle("d-none", !hasIgnored);
 }
 
 function checkRequiredMapped() {
