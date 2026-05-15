@@ -307,12 +307,13 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
             elif title in ("mrs", "miss"):
                 mapped["gender"] = "2"
 
-        # Duplicate email check (all entity types)
-        email = mapped.get("email", "")
-        if email and email in seen_emails:
-            errors.append({"field": "email", "reason": "Duplikat-E-Mail — wird übersprungen"})
-        elif email:
-            seen_emails.add(email)
+        # Duplicate email check (guests and companies only — reservations may share emails)
+        if entity_type in ("guest", "company"):
+            email = mapped.get("email", "")
+            if email and email in seen_emails:
+                errors.append({"field": "email", "reason": "Duplikat-E-Mail — wird übersprungen"})
+            elif email:
+                seen_emails.add(email)
 
         if errors:
             result.error_rows.append({
