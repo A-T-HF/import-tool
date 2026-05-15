@@ -75,6 +75,27 @@
     </div>
   </div>
 
+  <!-- Screen 4: Zimmerzuordnung (Reservierungen) -->
+  <div id="screen4" class="screen card shadow-sm p-4">
+    <h2 class="h5 mb-1">Zimmerzuordnung</h2>
+    <p class="text-muted small mb-3">
+      Ordne die Zimmernamen aus der Importdatei den Zimmern in HotelFriend zu.
+      Leer lassen = Originalwert wird unverändert übernommen.
+    </p>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead class="table-light">
+          <tr><th>Zimmer (Quelle)</th><th>→ Zimmername in HotelFriend</th></tr>
+        </thead>
+        <tbody id="zimmerMappingTable"></tbody>
+      </table>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary" id="btnBackZimmer">← Zurück</button>
+      <button class="btn btn-primary" id="btnZimmerWeiter">Prüfen & Weiter →</button>
+    </div>
+  </div>
+
   <!-- Screen 3a: Error Correction -->
   <div id="screen3a" class="screen card shadow-sm p-4">
     <h2 class="h5 mb-1">Prüfen & bearbeiten</h2>
@@ -112,6 +133,7 @@
 const S = {
   entityType: "guest",
   source: "csv",        // "csv" | "hs3" | "mews"
+  zimmerMapping: {},    // {sourceZimmerName: hfZimmerName}
   allRows: [],
   columns: [],
   preview: [],
@@ -128,9 +150,9 @@ const S = {
 // ── Screen navigation ──────────────────────────────────────────────
 function showScreen(n) {
   document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
-  const id = n === "3a" ? "screen3a" : n === "3b" ? "screen3b" : `screen${n}`;
+  const id = n === "3a" ? "screen3a" : n === "3b" ? "screen3b" : n === "4" ? "screen4" : `screen${n}`;
   document.getElementById(id).classList.add("active");
-  const labels = {1:"Schritt 1 von 4",2:"Schritt 2 von 4","3a":"Schritt 3 von 4","3b":"Schritt 4 von 4"};
+  const labels = {1:"Schritt 1 von 4",2:"Schritt 2 von 4","4":"Zimmerzuordnung","3a":"Schritt 3 von 4","3b":"Schritt 4 von 4"};
   document.getElementById("stepBadge").textContent = labels[n] || "";
   // Show "Alle Typen" button on 3a for pre-mapped sources (HS3 / Mews)
   const isPreMapped = S.source === "hs3" || S.source === "mews";
@@ -193,9 +215,13 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
         : [];
       S.mapping = Object.fromEntries(fields.map(f => [f, f]));
 
-      // Validate directly and skip to screen 3a
-      await validateAndShowErrors(S.allRows);
-      showScreen("3a");
+      if (S.entityType === "reservation") {
+        buildZimmerScreen();
+        showScreen("4");
+      } else {
+        await validateAndShowErrors(S.allRows);
+        showScreen("3a");
+      }
     } else {
       const res = await fetch("/upload", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
@@ -212,8 +238,13 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
           : [];
         S.mapping = Object.fromEntries(fields.map(f => [f, f]));
 
-        await validateAndShowErrors(S.allRows);
-        showScreen("3a");
+        if (S.entityType === "reservation") {
+          buildZimmerScreen();
+          showScreen("4");
+        } else {
+          await validateAndShowErrors(S.allRows);
+          showScreen("3a");
+        }
       } else {
         S.source = "csv";
         S.allRows = data.all_rows;
@@ -288,8 +319,13 @@ document.getElementById("btnValidate").addEventListener("click", async () => {
   const btn = document.getElementById("btnValidate");
   btn.disabled = true; btn.textContent = "Prüfe…";
   try {
-    await validateAndShowErrors(S.allRows);
-    showScreen("3a");
+    if (S.entityType === "reservation") {
+      buildZimmerScreen();
+      showScreen("4");
+    } else {
+      await validateAndShowErrors(S.allRows);
+      showScreen("3a");
+    }
   } finally {
     btn.disabled = false; btn.textContent = "Prüfen & Weiter →";
   }
@@ -525,7 +561,12 @@ document.getElementById("btnBack3a").addEventListener("click", () => {
   btnToggle.textContent = "Alle Zeilen anzeigen & bearbeiten ▾";
   S.validCorrections = {};
 
-  showScreen(S.source === "csv" ? 2 : 1);
+  if (S.entityType === "reservation") {
+    buildZimmerScreen();
+    showScreen("4");
+  } else {
+    showScreen(S.source === "csv" ? 2 : 1);
+  }
 });
 
 document.getElementById("btnRevalidate").addEventListener("click", async () => {
@@ -548,7 +589,7 @@ document.getElementById("btnRevalidate").addEventListener("click", async () => {
   S.corrections = {};
   S.validCorrections = {};
   S.skipped = new Set();
-  await validateAndShowErrors(correctedRows);
+  await validateAndShowErrors(applyZimmerMapping(correctedRows));
 });
 
 document.getElementById("btnDownload").addEventListener("click", () => {
@@ -622,6 +663,62 @@ async function downloadAll(btn) {
     btn.disabled = false; btn.textContent = orig;
   }
 }
+
+// ── Screen 4: Zimmerzuordnung ───────────────────────────────────────
+function _zimmerSrcCol() {
+  // For CSV: find source column mapped to "Zimmer"; for HS3/Mews: field is "Zimmer" directly
+  return S.source === "csv"
+    ? (Object.keys(S.mapping).find(k => S.mapping[k] === "Zimmer") || "Zimmer")
+    : "Zimmer";
+}
+
+function applyZimmerMapping(rows) {
+  const zm = S.zimmerMapping;
+  if (!Object.keys(zm).length) return rows;
+  const col = _zimmerSrcCol();
+  return rows.map(row => {
+    const val = row[col] ?? "";
+    if (val in zm && zm[val] !== "") {
+      return { ...row, [col]: zm[val] };
+    }
+    return row;
+  });
+}
+
+function buildZimmerScreen() {
+  const col = _zimmerSrcCol();
+  const unique = [...new Set(S.allRows.map(r => (r[col] ?? "").trim()).filter(Boolean))].sort();
+  const tbody = document.getElementById("zimmerMappingTable");
+  tbody.innerHTML = unique.map(z => `<tr>
+    <td class="fw-semibold align-middle">${z}</td>
+    <td>
+      <input type="text" class="form-control form-control-sm zimmer-map-input"
+        data-source="${z.replace(/"/g, '&quot;')}"
+        value="${(S.zimmerMapping[z] ?? "").replace(/"/g, '&quot;')}"
+        placeholder="${z.replace(/"/g, '&quot;')}">
+    </td>
+  </tr>`).join("");
+  tbody.querySelectorAll(".zimmer-map-input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      S.zimmerMapping[inp.dataset.source] = inp.value;
+    });
+  });
+}
+
+document.getElementById("btnBackZimmer").addEventListener("click", () => {
+  showScreen(S.source === "csv" ? 2 : 1);
+});
+
+document.getElementById("btnZimmerWeiter").addEventListener("click", async () => {
+  const btn = document.getElementById("btnZimmerWeiter");
+  btn.disabled = true; btn.textContent = "Prüfe…";
+  try {
+    await validateAndShowErrors(applyZimmerMapping(S.allRows));
+    showScreen("3a");
+  } finally {
+    btn.disabled = false; btn.textContent = "Prüfen & Weiter →";
+  }
+});
 
 document.getElementById("btnDownloadAll").addEventListener("click", function() {
   downloadAll(this);
