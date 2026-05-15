@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 from rapidfuzz import process, fuzz
+from guests_importer import derive_name_from_email
 
 ENTITY_TYPES = ["guest", "company", "reservation"]
 
@@ -258,6 +259,13 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                     mapped[target_field] = transformed or ""
             else:
                 mapped[target_field] = raw_value
+
+        # Derive first name from email when first_name is missing but email + last_name are present
+        if entity_type in ("guest", "reservation"):
+            if not mapped.get("first_name") and mapped.get("last_name") and mapped.get("email"):
+                derived = derive_name_from_email(mapped["email"], mapped["last_name"])
+                if derived:
+                    mapped["first_name"] = derived
 
         # Apply "-" placeholder for missing name fields so imports never fail on empty names
         if entity_type in ("guest", "reservation"):
