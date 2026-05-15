@@ -272,6 +272,12 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 if err:
                     errors.append({"field": fname, "reason": err})
 
+        # Derive cancellation status from row content when Status is empty (reservations only)
+        if entity_type == "reservation" and not mapped.get("Status"):
+            row_text = " ".join(str(v) for v in raw_row.values()).lower()
+            if "storniert" in row_text or "cancelled" in row_text or "canceled" in row_text:
+                mapped["Status"] = "cancelled_by_guest"
+
         # Derive gender from title when gender is missing (guests only)
         if entity_type == "guest" and not mapped.get("gender"):
             title = mapped.get("title", "").lower()
