@@ -150,15 +150,32 @@ def transform_title(value: str) -> str | None:
 
 # --- Reservierungsstatus ---
 _STATUS_MAP = {
-    "neu": "new", "new": "new",
-    "bestätigt": "confirmed", "confirmed": "confirmed", "optional": "booking_offer",
-    "eingecheckt": "check_in", "check_in": "check_in",
-    "ausgecheckt": "check_out", "check_out": "check_out",
-    "storniert (gast)": "cancelled_by_guest", "cancelled_by_guest": "cancelled_by_guest",
-    "storniert (hotel)": "cancelled_by_hf", "cancelled_by_hf": "cancelled_by_hf",
-    "no show": "no_show", "no_show": "no_show",
-    "due_in": "due_in", "due_out": "due_out",
+    # Englisch (HotelFriend-Zielwerte)
+    "new": "new",
+    "confirmed": "confirmed",
+    "due_in": "due_in",
+    "check_in": "check_in",
+    "due_out": "due_out",
+    "check_out": "check_out",
+    "cancelled_by_guest": "cancelled_by_guest",
+    "cancelled_by_hf": "cancelled_by_hf",
+    "no_show": "no_show",
     "booking_offer": "booking_offer",
+    # Deutsch (HotelFriend / Mews)
+    "neu": "new",
+    "bestätigt": "confirmed",
+    "fällig (anreise)": "due_in",
+    "fällig anreise": "due_in",
+    "eingecheckt": "check_in",
+    "fällig (abreise)": "due_out",
+    "fällig abreise": "due_out",
+    "ausgecheckt": "check_out",
+    "storniert (gast)": "cancelled_by_guest",
+    "storniert": "cancelled_by_guest",   # generisch → Gast
+    "storniert (hotel)": "cancelled_by_hf",
+    "no show": "no_show",
+    "optional": "booking_offer",
+    "angebot": "booking_offer",
 }
 
 def transform_amount(value: str) -> str | None:
