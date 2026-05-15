@@ -30,6 +30,10 @@
   <div id="screen1" class="screen active card shadow-sm p-4">
     <h2 class="h5 mb-3">Datei hochladen</h2>
     <div class="mb-3">
+      <label class="form-label fw-semibold">Hotelname <span class="text-muted fw-normal">(für den Dateinamen)</span></label>
+      <input type="text" id="hotelName" class="form-control" placeholder="z.B. Hotel Seeblick">
+    </div>
+    <div class="mb-3">
       <label class="form-label fw-semibold">Entitätstyp</label>
       <select id="entityType" class="form-select">
         <option value="guest">Gäste</option>
@@ -636,6 +640,12 @@ document.getElementById("btnDownload").addEventListener("click", () => {
     ${total > 100 ? " Die Datei wird automatisch in Teile à 100 Zeilen aufgeteilt (ZIP)." : ""}`;
 });
 
+function _filePrefix() {
+  const name = document.getElementById("hotelName").value.trim();
+  if (!name) return "";
+  return name.replace(/[^\wäöüÄÖÜß\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") + "_";
+}
+
 // ── Screen 3b: Download ────────────────────────────────────────────
 document.getElementById("btnDoDownload").addEventListener("click", async () => {
   const btn = document.getElementById("btnDoDownload");
@@ -653,7 +663,8 @@ document.getElementById("btnDoDownload").addEventListener("click", async () => {
     const blob = await res.blob();
     const disposition = res.headers.get("Content-Disposition") || "";
     const nameMatch = disposition.match(/filename="?([^"]+)"?/);
-    const filename = nameMatch ? nameMatch[1] : "import.csv";
+    const serverName = nameMatch ? nameMatch[1] : `${S.entityType}_import.csv`;
+    const filename = _filePrefix() + serverName;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = filename;
@@ -681,7 +692,7 @@ async function downloadAll(btn) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = selectedFile.name.replace(/\.[^.]+$/, "_alle.zip");
+    a.download = _filePrefix() + selectedFile.name.replace(/\.[^.]+$/, "_alle.zip");
     a.click();
     URL.revokeObjectURL(url);
   } finally {
