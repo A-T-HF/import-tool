@@ -324,6 +324,14 @@ def _read_reservations(rows: list[dict]) -> list[dict]:
         first, last  = _parse_person_name(raw_nachname, raw_vorname)
         first, last  = first.strip(), last.strip()
 
+        email = _clean(row.get("E-Mail"))
+
+        # Try to derive first name from email when missing
+        if not first and last and email:
+            derived = derive_name_from_email(email, last)
+            if derived:
+                first = derived
+
         sys: dict = {}
         # Name was split out of compound "Company, Person Name" Nachname
         if "," in raw_nachname and raw_vorname:
@@ -342,7 +350,6 @@ def _read_reservations(rows: list[dict]) -> list[dict]:
             "Zimmertyp":       _clean(row.get("Raumkategorie")),
             "_system_changes": sys,
         }
-        email = _clean(row.get("E-Mail"))
         if email:
             r["email"] = email
         summe = row.get("Gesamtbetrag")
@@ -354,7 +361,7 @@ def _read_reservations(rows: list[dict]) -> list[dict]:
         mews_id = _clean(row.get("Kennung"))
         if mews_id:
             r["_mews_id"] = mews_id
-        result.append({k: v for k, v in r.items() if v})
+        result.append({k: v for k, v in r.items() if v is not None and v != ""})
     return result
 
 
