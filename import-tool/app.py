@@ -33,6 +33,10 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB (HSB-Backups bis ~3
 def index():
     return render_template("index.html")
 
+@app.route("/preview")
+def preview():
+    return render_template("preview.html")
+
 @app.route("/upload", methods=["POST"])
 def upload():
     f = request.files.get("file")
