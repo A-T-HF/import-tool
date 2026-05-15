@@ -135,6 +135,7 @@
     <div class="d-flex gap-2 mt-3">
       <button class="btn btn-outline-secondary" id="btnBack3a">← Zurück</button>
       <button id="btnSkipNoEmail" class="btn btn-outline-warning d-none">Alle ohne E-Mail überspringen</button>
+      <button id="btnSkipDupEmails" class="btn btn-outline-warning d-none">Duplikate überspringen</button>
       <button id="btnClearDupEmails" class="btn btn-outline-warning d-none">Duplikat-E-Mails löschen</button>
       <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
       <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
@@ -488,6 +489,7 @@ function renderErrorScreen() {
     r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))
   );
   document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
+  document.getElementById("btnSkipDupEmails").classList.toggle("d-none", dupEmailErrors.length === 0);
   document.getElementById("btnClearDupEmails").classList.toggle("d-none", dupEmailErrors.length === 0);
 
 }
@@ -495,6 +497,17 @@ function renderErrorScreen() {
 document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
   S.errorRows.forEach(r => {
     if (r.errors.every(e => e.field === "email")) S.skipped.add(r.row_index);
+  });
+  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+  renderErrorScreen();
+});
+
+document.getElementById("btnSkipDupEmails").addEventListener("click", () => {
+  S.errorRows.forEach(r => {
+    if (r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))) {
+      S.skipped.add(r.row_index);
+    }
   });
   const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
   document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
