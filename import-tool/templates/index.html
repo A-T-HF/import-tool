@@ -503,7 +503,10 @@ function renderValidTable() {
   const validOriginals = S.allRows.filter((_, i) => !errorIndices.has(i));
 
   const bodyRows = S.validRows.map((row, idx) => {
-    const sysChanges = (validOriginals[idx] || {})._system_changes || {};
+    const sysChanges = {
+      ...((validOriginals[idx] || {})._system_changes || {}),
+      ...(row._system_changes || {}),
+    };
     const cells = fields.map(f => {
       const original  = String(row[f] ?? "");
       const current   = String(S.validCorrections[idx]?.[f] ?? original);

@@ -261,17 +261,23 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 mapped[target_field] = raw_value
 
         # Derive first name from email when first_name is missing but email + last_name are present
+        auto_filled: dict = {}
         if entity_type in ("guest", "reservation"):
             if not mapped.get("first_name") and mapped.get("last_name") and mapped.get("email"):
                 derived = derive_name_from_email(mapped["email"], mapped["last_name"])
                 if derived:
+                    auto_filled["first_name"] = ""   # original was empty
                     mapped["first_name"] = derived
 
         # Apply "-" placeholder for missing name fields so imports never fail on empty names
         if entity_type in ("guest", "reservation"):
             for fname in ("first_name", "last_name"):
                 if not mapped.get(fname):
+                    auto_filled[fname] = ""          # original was empty
                     mapped[fname] = "-"
+
+        if auto_filled:
+            mapped["_system_changes"] = auto_filled
 
         # Check required fields
         for fname, fschema in fields_schema.items():
