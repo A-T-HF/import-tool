@@ -259,6 +259,12 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
             else:
                 mapped[target_field] = raw_value
 
+        # Apply "-" placeholder for missing name fields so imports never fail on empty names
+        if entity_type in ("guest", "reservation"):
+            for fname in ("first_name", "last_name"):
+                if not mapped.get(fname):
+                    mapped[fname] = "-"
+
         # Check required fields
         for fname, fschema in fields_schema.items():
             if fschema["required"] and not mapped.get(fname):

@@ -191,14 +191,12 @@ def test_transform_valid_guest_row():
     assert result.valid_rows[0]["email"] == "max@example.com"
     assert result.valid_rows[0]["first_name"] == "Max"
 
-def test_transform_missing_required_field():
+def test_transform_missing_name_auto_fills_placeholder():
+    # Empty first_name → auto-filled with "-" so import never fails on missing names
     rows = [{"Vorname": "", "Nachname": "Müller", "E-Mail": ""}]
     result = transform(rows, "guest", _guest_mapping())
-    assert len(result.valid_rows) == 0
-    assert len(result.error_rows) == 1
-    error = result.error_rows[0]
-    assert error["row_index"] == 0
-    assert any(e["field"] == "first_name" for e in error["errors"])
+    assert len(result.valid_rows) == 1
+    assert result.valid_rows[0]["first_name"] == "-"
 
 def test_transform_date_auto_converted():
     rows = [{
