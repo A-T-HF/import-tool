@@ -145,7 +145,7 @@ def transform_country(value: str) -> str | None:
 # --- Gender ---
 _GENDER_MAP = {
     "1": "1", "m": "1", "male": "1", "männlich": "1", "mann": "1",
-    "2": "2", "f": "2", "female": "2", "weiblich": "2", "frau": "2",
+    "2": "2", "f": "2", "w": "2", "female": "2", "weiblich": "2", "frau": "2",
     "3": "3", "other": "3", "divers": "3", "x": "3",
 }
 
@@ -281,7 +281,10 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 else:
                     mapped[target_field] = transformed or ""
             else:
-                mapped[target_field] = raw_value
+                if target_field in mapped and mapped[target_field] and raw_value:
+                    mapped[target_field] = mapped[target_field] + ", " + raw_value
+                else:
+                    mapped[target_field] = raw_value or mapped.get(target_field, "")
 
         # Derive first name from email when first_name is missing but email + last_name are present
         auto_filled: dict = {}
