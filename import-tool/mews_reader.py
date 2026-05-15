@@ -194,10 +194,10 @@ def _load_rows(file_or_path) -> list[dict]:
         if not first.isdigit():
             continue
         # Skip companion/address sub-rows: openpyxl returns real dates as datetime objects.
-        # If Anreise is a non-empty string it's not a booking row (e.g. guest address data).
+        # Only keep rows where Anreise is an actual date — skip None and non-date strings.
         if anreise_idx >= 0:
             anreise_val = row[anreise_idx]
-            if anreise_val is not None and not isinstance(anreise_val, (date, datetime)):
+            if not isinstance(anreise_val, (date, datetime)):
                 continue
         rows.append(dict(zip(headers, row)))
     return rows

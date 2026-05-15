@@ -812,9 +812,16 @@ function _buildMappingSubTable(tbodyId, stateKey, srcRows, srcCol, hfOptions) {
   const tbody = document.getElementById(tbodyId);
   const listId = tbodyId + "DL";
 
-  const datalist = hfOptions.length
-    ? `<datalist id="${listId}">${hfOptions.map(o => `<option value="${o.replace(/"/g, '&quot;')}">`).join("")}</datalist>`
-    : "";
+  // Datalist must live in <body>, not inside <tbody> (invalid HTML → browsers ignore it)
+  const oldDl = document.getElementById(listId);
+  if (oldDl) oldDl.remove();
+  if (hfOptions.length) {
+    const dl = document.createElement("datalist");
+    dl.id = listId;
+    hfOptions.forEach(o => { const opt = document.createElement("option"); opt.value = o; dl.appendChild(opt); });
+    document.body.appendChild(dl);
+  }
+  const datalist = "";
 
   tbody.innerHTML = datalist + unique.map(z => {
     const auto   = _autoMatch(z, hfOptions);
