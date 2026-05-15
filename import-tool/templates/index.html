@@ -233,10 +233,9 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       S.targetFields = [];  // not needed — rows already have HF field names
 
       // Identity mapping: non-meta fields only (_-prefixed are internal)
-      const fields = S.allRows.length
-        ? Object.keys(S.allRows[0]).filter(f => !f.startsWith("_"))
-        : [];
-      S.mapping = Object.fromEntries(fields.map(f => [f, f]));
+      // Collect all unique non-meta keys across ALL rows (first row may be missing fields like Zimmer)
+      const allKeys = new Set(S.allRows.flatMap(r => Object.keys(r).filter(f => !f.startsWith("_"))));
+      S.mapping = Object.fromEntries([...allKeys].map(f => [f, f]));
 
       if (S.entityType === "reservation") {
         buildZimmerScreen();
