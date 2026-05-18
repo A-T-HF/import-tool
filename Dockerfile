@@ -6,10 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Firebird 3 — für HS3-Backup-Restore (gbak) und embedded DB-Zugriff
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libfbclient2 \
-    firebird3.0-utils \
+# Firebird 3 — Engine-Plugin für embedded gbak-Restore (HS3-Backups)
+# firebird3.0-server wird nur für libEngine13.so benötigt, nicht als laufender Dienst
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && apt-get install -y --no-install-recommends firebird3.0-server \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
