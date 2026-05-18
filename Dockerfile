@@ -6,11 +6,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Firebird 3 — Engine-Plugin für embedded gbak-Restore (HS3-Backups)
-# firebird3.0-server wird nur für libEngine13.so benötigt, nicht als laufender Dienst
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && apt-get install -y --no-install-recommends firebird3.0-server \
+# Firebird 5 embedded — für HS3-Backup-Restore ohne laufenden Server
+# Gleiche Version wie macOS-Entwicklungssetup
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && mkdir -p /opt/firebird5 \
+    && curl -fsSL \
+       "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0.amd64.tar.gz" \
+       | tar -xzf - --strip-components=1 -C /opt/firebird5 \
+    && chmod +x /opt/firebird5/bin/* \
+    && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
+
+ENV HS3_FIREBIRD_HOME=/opt/firebird5
 
 COPY requirements.txt ./
 RUN pip install -r requirements.txt

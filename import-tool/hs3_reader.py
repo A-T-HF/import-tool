@@ -36,20 +36,40 @@ def _load_firebird():
     os.environ.setdefault("FIREBIRD_LOCK", str(lock_dir))
 
     lib_dir = Path(HS3_FIREBIRD_HOME) / "lib"
-    if lib_dir.exists():
-        # Lokale Embedded-Libs (macOS-Entwicklung)
-        for dep in [
-            "libtommath.dylib", "libtomcrypt.dylib",
-            "libicudata.71.dylib", "libicuuc.71.dylib", "libicui18n.71.dylib",
-            "libfbclient.dylib",
-        ]:
-            path = lib_dir / dep
-            if path.exists():
-                ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
-        os.environ["FIREBIRD"] = HS3_FIREBIRD_HOME
+    if not lib_dir.exists():
+        raise RuntimeError(
+            f"Firebird nicht gefunden unter {HS3_FIREBIRD_HOME}. "
+            "Bitte HS3_FIREBIRD_HOME setzen."
+        )
+
+    os.environ["FIREBIRD"] = HS3_FIREBIRD_HOME
+
+    # Shared libraries laden — macOS (.dylib) und Linux (.so) unified
+    # Reihenfolge wichtig: Abhängigkeiten vor Client-Lib
+    for pattern in [
+        "libtommath.*", "libtomcrypt.*",
+        "libicudata.*", "libicuuc.*", "libicui18n.*",
+        "libfbclient.*",
+    ]:
+        # Bevorzuge unversionierten Symlink; lade nur einen pro Pattern
+        candidates = sorted(lib_dir.glob(pattern), key=lambda p: len(p.name))
+        for path in candidates:
+            if path.suffix in (".dylib", ".so") or ".so." in path.name:
+                try:
+                    ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
+                    break
+                except OSError:
+                    continue
+
+    # firebird-driver auf die richtige Client-Lib zeigen
+    fb_client = next(
+        (lib_dir / n for n in ("libfbclient.dylib", "libfbclient.so")
+         if (lib_dir / n).exists()),
+        next(lib_dir.glob("libfbclient.so.*"), None),
+    )
+    if fb_client:
         from firebird.driver import driver_config
-        driver_config.fb_client_library.value = str(lib_dir / "libfbclient.dylib")
-    # else: System-Firebird (Linux) — firebird.driver findet libfbclient.so automatisch
+        driver_config.fb_client_library.value = str(fb_client)
 
     _fb_loaded = True
 
