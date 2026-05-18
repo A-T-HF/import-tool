@@ -7,18 +7,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Firebird 5 embedded — für HS3-Backup-Restore ohne laufenden Server
-# Gleiche Version wie macOS-Entwicklungssetup
+# Tarball enthält buildroot.tar.gz mit ./opt/firebird/... → direkt nach / extrahieren
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && mkdir -p /opt/firebird5 \
     && curl -fsSL \
        "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0-linux-x64.tar.gz" \
-       | tar -xzf - --strip-components=1 -C /opt/firebird5 \
-    && chmod +x /opt/firebird5/bin/* \
+       | tar -xzOf - "Firebird-5.0.1.1469-0-linux-x64/buildroot.tar.gz" \
+       | tar -xzf - -C / \
+    && chmod +x /opt/firebird/bin/* \
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 
-ENV HS3_FIREBIRD_HOME=/opt/firebird5
+ENV HS3_FIREBIRD_HOME=/opt/firebird
 
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
