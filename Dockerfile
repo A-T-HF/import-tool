@@ -12,7 +12,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && mkdir -p /opt/firebird5 \
     && curl -fsSL \
-       "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0.amd64.tar.gz" \
+       "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0-linux-x64.tar.gz" \
        | tar -xzf - --strip-components=1 -C /opt/firebird5 \
     && chmod +x /opt/firebird5/bin/* \
     && apt-get purge -y --auto-remove curl \
