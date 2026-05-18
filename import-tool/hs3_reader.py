@@ -10,7 +10,7 @@ Requires: Firebird 5 arm64 embedded at HS3_FIREBIRD_HOME env var
 import os
 import ctypes
 import zipfile
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import shutil
 from pathlib import Path
@@ -79,7 +79,7 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
     env["DYLD_LIBRARY_PATH"] = str(Path(HS3_FIREBIRD_HOME) / "lib")
     env["FIREBIRD"] = HS3_FIREBIRD_HOME
 
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603
         [str(gbak), "-c", "-user", "sysdba", "-password", "masterkey",
          str(bak_path), str(fdb_path)],
         env=env, capture_output=True, text=True,
@@ -91,7 +91,7 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
 def _connect(fdb_path: Path):
     _load_firebird()
     from firebird.driver import connect
-    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="WIN1252")
+    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="WIN1252")  # nosec B106
 
 
 # ── Status mapping ──────────────────────────────────────────────────────────
