@@ -29,6 +29,11 @@ def pad_to_schema(rows: list[dict], entity_type: str) -> list[dict]:
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB (HSB-Backups bis ~30 MB)
 
+@app.get("/healthz")
+def healthz():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
