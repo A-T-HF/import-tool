@@ -82,18 +82,48 @@ from datetime import datetime
 import re
 
 # --- Datum ---
-_DATE_FORMATS = [
+_DATE_FORMATS_EU = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",  # Mews: "29.01.2026 15:00"
-    "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",
+    "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",      # EU slash before US slash
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%d.%m.%y", "%m/%d/%y",
 ]
+_DATE_FORMATS_US = [
+    "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",
+    "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y",      # US slash before EU slash
+    "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
+    "%m/%d/%y", "%d.%m.%y",
+]
 
-def transform_date(value: str) -> str | None:
+_SLASH_DATE = re.compile(r'^(\d{1,2})/(\d{1,2})/\d{2,4}$')
+
+def detect_american_dates(rows: list[dict], mapping: dict[str, str]) -> bool:
+    """
+    Scan up to 20 rows of date columns to detect MM/DD/YYYY (American) format.
+    - If any date has second part > 12 → American (second part can only be a day)
+    - If any date has first part > 12 → European (first part can only be a day)
+    - If all ambiguous → False (default to European)
+    """
+    date_fields = {"Check In", "Check Out", "date_of_birth", "passport_expiry", "passport_from"}
+    date_cols = [src for src, tgt in mapping.items() if tgt in date_fields]
+    for row in rows[:20]:
+        for col in date_cols:
+            val = str(row.get(col, "") or "").strip()
+            m = _SLASH_DATE.match(val)
+            if m:
+                a, b = int(m.group(1)), int(m.group(2))
+                if b > 12:   # second part > 12 → must be day → American
+                    return True
+                if a > 12:   # first part > 12 → must be day → European
+                    return False
+    return False
+
+def transform_date(value: str, prefer_american: bool = False) -> str | None:
     if not value or not value.strip():
         return None
     v = value.strip()
-    for fmt in _DATE_FORMATS:
+    formats = _DATE_FORMATS_US if prefer_american else _DATE_FORMATS_EU
+    for fmt in formats:
         try:
             return datetime.strptime(v, fmt).strftime("%Y-%m-%d")
         except ValueError:
@@ -261,6 +291,7 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
     fields_schema = {f["name"]: f for f in get_fields(entity_type)}
     result = TransformResult()
     seen_emails = set()
+    prefer_american = detect_american_dates(rows, mapping)
 
     for row_index, raw_row in enumerate(rows):
         mapped = {}
@@ -274,7 +305,7 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
             schema = fields_schema.get(target_field, {})
             transformer_name = schema.get("transformer")
             if transformer_name:
-                transformed = _TRANSFORMERS[transformer_name](raw_value)
+                transformed = _TRANSFORMERS[transformer_name](raw_value, prefer_american) if transformer_name == "date" else _TRANSFORMERS[transformer_name](raw_value)
                 if transformed is None and raw_value:
                     errors.append({"field": target_field, "reason": f"Wert '{raw_value}' konnte nicht konvertiert werden"})
                     mapped[target_field] = raw_value  # keep original for inline correction
@@ -317,6 +348,13 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 err = validate_field(validator_name, mapped[fname])
                 if err:
                     errors.append({"field": fname, "reason": err})
+
+        # Check Out must be after Check In
+        if entity_type == "reservation":
+            check_in  = mapped.get("Check In",  "")
+            check_out = mapped.get("Check Out", "")
+            if check_in and check_out and check_out <= check_in:
+                errors.append({"field": "Check Out", "reason": f"Abreise ({check_out}) liegt nicht nach Anreise ({check_in})"})
 
         # Derive cancellation status from row content when Status is empty (reservations only)
         if entity_type == "reservation" and not mapped.get("Status"):
