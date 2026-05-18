@@ -15,10 +15,13 @@ RUN apt-get update \
        | tar -xzOf - "Firebird-5.0.1.1469-0-linux-x64/buildroot.tar.gz" \
        | tar -xzf - -C / \
     && chmod +x /opt/firebird/bin/* \
+    && echo "/opt/firebird/lib" > /etc/ld.so.conf.d/firebird.conf \
+    && ldconfig \
     && apt-get purge -y --auto-remove curl \
     && rm -rf /var/lib/apt/lists/*
 
-ENV HS3_FIREBIRD_HOME=/opt/firebird
+ENV HS3_FIREBIRD_HOME=/opt/firebird \
+    LD_LIBRARY_PATH=/opt/firebird/lib
 
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
