@@ -368,6 +368,9 @@
   </div>
 
 <script>
+// Basis-Pfad: funktioniert lokal (/), auf dem Server (/apps/support-import-tool/) und überall dazwischen
+const BASE = window.location.pathname.replace(/\/$/, "");
+
 // ── State ──────────────────────────────────────────────────────────
 const S = {
   entityType: "guest",
@@ -442,7 +445,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
     if (isHs3) {
       // HS3 direct import — skip column mapping, go straight to validation
       btn.textContent = "HS3 wird eingelesen…";
-      const res = await fetch("/upload_hs3", { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/upload_hs3`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
 
@@ -463,7 +466,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
         showScreen("3a");
       }
     } else {
-      const res = await fetch("/upload", { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/upload`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
 
@@ -582,7 +585,7 @@ document.getElementById("btnValidate").addEventListener("click", async () => {
 
 // ── Screen 3a: Error Correction ────────────────────────────────────
 async function validateAndShowErrors(rows) {
-  const res = await fetch("/validate", {
+  const res = await fetch(`${BASE}/validate`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ rows, entity_type: S.entityType, mapping: S.mapping }),
@@ -917,7 +920,7 @@ document.getElementById("btnDoDownload").addEventListener("click", async () => {
   const btn = document.getElementById("btnDoDownload");
   btn.disabled = true; btn.textContent = "Wird erstellt…";
   try {
-    const res = await fetch("/download", {
+    const res = await fetch(`${BASE}/download`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
@@ -948,7 +951,7 @@ async function downloadAll(btn) {
   try {
     const fd = new FormData();
     fd.append("file", selectedFile);
-    const res = await fetch("/download_all", { method: "POST", body: fd });
+    const res = await fetch(`${BASE}/download_all`, { method: "POST", body: fd });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       alert(err.error || `Fehler ${res.status}`);
