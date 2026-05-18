@@ -9,7 +9,7 @@ WORKDIR /app
 # Firebird 5 embedded — für HS3-Backup-Restore ohne laufenden Server
 # Tarball enthält buildroot.tar.gz mit ./opt/firebird/... → direkt nach / extrahieren
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libtommath1 libtomcrypt1 \
     && curl -fsSL \
        "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0-linux-x64.tar.gz" \
        | tar -xzOf - "Firebird-5.0.1.1469-0-linux-x64/buildroot.tar.gz" \
