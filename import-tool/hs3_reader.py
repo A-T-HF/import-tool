@@ -3,8 +3,8 @@ HS3 Firebird Database Reader
 Reads guests, companies, and reservations from HS3 .hsb backup files
 and returns them pre-mapped to HotelFriend import format.
 
-Requires: Firebird 5 arm64 embedded at HS3_FIREBIRD_HOME env var
-          (defaults to /tmp/fb5_arm64/Firebird.pkg/Versions/A/Resources)
+Lokale Entwicklung (macOS): Firebird-Embedded-Libs unter import-tool/firebird/
+Server (Linux):              System-Firebird (apt install libfbclient2 firebird3.0-utils)
 """
 
 import os
@@ -30,28 +30,27 @@ def _load_firebird():
     global _fb_loaded
     if _fb_loaded:
         return
-    lib_dir = Path(HS3_FIREBIRD_HOME) / "lib"
-    if not lib_dir.exists():
-        raise RuntimeError(
-            f"Firebird nicht gefunden unter {HS3_FIREBIRD_HOME}. "
-            "Bitte HS3_FIREBIRD_HOME setzen."
-        )
-    for dep in [
-        "libtommath.dylib", "libtomcrypt.dylib",
-        "libicudata.71.dylib", "libicuuc.71.dylib", "libicui18n.71.dylib",
-        "libfbclient.dylib",
-    ]:
-        path = lib_dir / dep
-        if path.exists():
-            ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
 
-    os.environ["FIREBIRD"] = HS3_FIREBIRD_HOME
     lock_dir = Path(tempfile.gettempdir()) / "hs3_fb_lock"
     lock_dir.mkdir(exist_ok=True)
     os.environ.setdefault("FIREBIRD_LOCK", str(lock_dir))
 
-    from firebird.driver import driver_config
-    driver_config.fb_client_library.value = str(lib_dir / "libfbclient.dylib")
+    lib_dir = Path(HS3_FIREBIRD_HOME) / "lib"
+    if lib_dir.exists():
+        # Lokale Embedded-Libs (macOS-Entwicklung)
+        for dep in [
+            "libtommath.dylib", "libtomcrypt.dylib",
+            "libicudata.71.dylib", "libicuuc.71.dylib", "libicui18n.71.dylib",
+            "libfbclient.dylib",
+        ]:
+            path = lib_dir / dep
+            if path.exists():
+                ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL)
+        os.environ["FIREBIRD"] = HS3_FIREBIRD_HOME
+        from firebird.driver import driver_config
+        driver_config.fb_client_library.value = str(lib_dir / "libfbclient.dylib")
+    # else: System-Firebird (Linux) — firebird.driver findet libfbclient.so automatisch
+
     _fb_loaded = True
 
 
@@ -71,13 +70,21 @@ def _extract_bak_from_hsb(hsb_path: Path, tmp_dir: Path) -> Path:
 
 def _restore_bak(bak_path: Path, fdb_path: Path):
     """Restore a Firebird .bak backup to a new .fdb using gbak."""
-    gbak = Path(HS3_FIREBIRD_HOME) / "bin" / "gbak"
-    if not gbak.exists():
-        raise RuntimeError(f"gbak nicht gefunden: {gbak}")
-
-    env = os.environ.copy()
-    env["DYLD_LIBRARY_PATH"] = str(Path(HS3_FIREBIRD_HOME) / "lib")
-    env["FIREBIRD"] = HS3_FIREBIRD_HOME
+    local_gbak = Path(HS3_FIREBIRD_HOME) / "bin" / "gbak"
+    if local_gbak.exists():
+        gbak = local_gbak
+        env = os.environ.copy()
+        env["DYLD_LIBRARY_PATH"] = str(Path(HS3_FIREBIRD_HOME) / "lib")
+        env["FIREBIRD"] = HS3_FIREBIRD_HOME
+    else:
+        system_gbak = shutil.which("gbak")
+        if not system_gbak:
+            raise RuntimeError(
+                "gbak nicht gefunden. "
+                "Bitte Firebird installieren (apt install firebird3.0-utils)."
+            )
+        gbak = Path(system_gbak)
+        env = os.environ.copy()
 
     result = subprocess.run(  # nosec B603
         [str(gbak), "-c", "-user", "sysdba", "-password", "masterkey",

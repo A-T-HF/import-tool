@@ -6,6 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Firebird 3 — für HS3-Backup-Restore (gbak) und embedded DB-Zugriff
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfbclient2 \
+    firebird3.0-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
