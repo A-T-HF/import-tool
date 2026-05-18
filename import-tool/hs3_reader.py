@@ -93,8 +93,10 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
     local_gbak = Path(HS3_FIREBIRD_HOME) / "bin" / "gbak"
     if local_gbak.exists():
         gbak = local_gbak
+        lib_path = str(Path(HS3_FIREBIRD_HOME) / "lib")
         env = os.environ.copy()
-        env["DYLD_LIBRARY_PATH"] = str(Path(HS3_FIREBIRD_HOME) / "lib")
+        env["DYLD_LIBRARY_PATH"] = lib_path   # macOS
+        env["LD_LIBRARY_PATH"] = lib_path     # Linux
         env["FIREBIRD"] = HS3_FIREBIRD_HOME
     else:
         system_gbak = shutil.which("gbak")
