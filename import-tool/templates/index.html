@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>HotelFriend Import Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --primary:       #2a6fdb;
+      --primary-hover: #1e5bbf;
+      --primary-light: #ddeaff;
+      --accent:        #3b9eff;
+      --accent-light:  #e8f4ff;
+      --success:       #1a9e5c;
+      --success-light: #d4f0e3;
+      --warning:       #d97706;
+      --warning-light: #fef3c7;
+      --danger:        #dc2626;
+      --danger-light:  #fee2e2;
+      --text:          #0b1b3a;
+      --text-muted:    #4a5878;
+      --border:        #dde3ee;
+      --bg:            #f4f6fb;
+      --white:         #ffffff;
+      --disabled:      #b0bac8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: linear-gradient(90deg, var(--text) 0%, var(--text-muted) 100%);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-project { color: #fff; font-size: 15px; font-weight: 700; text-decoration: none; }
+    .nav-logo-wrap { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .nav-logo { height: 20px; opacity: .85; filter: brightness(0) invert(1); }
+    .nav-back {
+      display: inline-flex; align-items: center;
+      padding: 4px 12px;
+      font-size: 12.5px; font-weight: 500; color: #fff;
+      text-decoration: none;
+      background: rgba(59,158,255,.25);
+      border: 1px solid rgba(59,158,255,.5);
+      border-radius: 20px;
+      white-space: nowrap;
+      transition: background .15s, border-color .15s;
+    }
+    .nav-back:hover { background: rgba(59,158,255,.45); border-color: rgba(59,158,255,.8); }
+
+    /* ── Layout ── */
+    .page-wrap { max-width: 860px; margin: 0 auto; padding: 28px 24px 60px; }
+    .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .page-header h1 { font-size: 20px; font-weight: 700; }
+
+    /* ── Screens ── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 28px;
+    }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .card-inner {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+    .card-inner-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+    label .hint { font-weight: 400; color: var(--text-muted); }
+    input[type=text], select, textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: inherit; font-size: 13.5px;
+      color: var(--text); background: var(--white);
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 90px; font-family: monospace; }
+    .field-required { color: var(--danger); font-weight: 600; }
+    .muted { color: var(--text-muted); font-size: 12.5px; }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .drop-zone.dragover { border-color: var(--primary); background: var(--primary-light); }
+    .drop-zone input[type=file] { display: none; }
+    .drop-zone p { color: var(--text-muted); font-size: 13px; margin-bottom: 6px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px;
+      font-family: inherit; font-size: 13.5px; font-weight: 500;
+      border-radius: 6px; border: 1px solid transparent;
+      cursor: pointer; transition: background .15s, border-color .15s;
+      text-decoration: none; white-space: nowrap;
+    }
+    .btn-sm { padding: 4px 12px; font-size: 12.5px; }
+    .btn-lg { padding: 10px 22px; font-size: 15px; }
+    .btn-primary   { background: var(--primary); color: var(--white); }
+    .btn-primary:hover { background: var(--primary-hover); color: var(--white); }
+    .btn-secondary { background: var(--white); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-ghost  { background: transparent; color: var(--text-muted); border-color: var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+    .btn-success { background: var(--success); color: var(--white); border-color: var(--success); }
+    .btn-success:hover { background: #157a48; color: var(--white); }
+    .btn-warning { background: var(--warning); color: var(--white); border-color: var(--warning); }
+    .btn-warning:hover { background: #b45309; color: var(--white); }
+    .btn-warning-outline { background: var(--white); color: var(--warning); border-color: var(--warning); }
+    .btn-warning-outline:hover { background: var(--warning-light); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; font-size: 11px; font-weight: 700;
+      border-radius: 10px; white-space: nowrap;
+    }
+    .badge-neutral { background: #e5e7eb; color: #374151; }
+    .badge-info    { background: var(--primary-light); color: var(--primary); }
+    .badge-success { background: var(--success-light); color: var(--success); }
+    .badge-warning { background: var(--warning-light); color: var(--warning); }
+    .badge-danger  { background: var(--danger-light);  color: var(--danger);  }
+
+    /* ── Alerts ── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      border-left: 4px solid transparent;
+      font-size: 13.5px;
+      margin-bottom: 16px;
+    }
+    .alert-info    { background: var(--primary-light); border-color: var(--primary); }
+    .alert-success { background: var(--success-light); border-color: var(--success); }
+    .alert-warning { background: var(--warning-light); border-color: var(--warning); }
+    .alert-danger  { background: var(--danger-light);  border-color: var(--danger);  }
+
+    /* ── Tables ── */
+    .table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+    .table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 9px 12px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .07em; text-transform: uppercase;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafbfd; }
+
+    /* Row highlight classes used by JS */
+    .table-warning { background: var(--warning-light) !important; }
+    .table-info    { background: var(--primary-light) !important; }
+    .table-danger  { background: var(--danger-light) !important; }
+
+    /* Inline edit inputs inside table cells */
+    td input[type=text] {
+      padding: 2px 4px; font-size: 13px;
+      border: 1px solid transparent; border-radius: 4px;
+      background: transparent; width: 100%;
+    }
+    td input[type=text]:focus { border-color: var(--primary); background: var(--white); }
+
+    /* Inline select inside table cells */
+    td select { padding: 3px 6px; font-size: 13px; }
+
+    /* ── Utility ── */
+    .d-none { display: none !important; }
+    .section-label { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <span class="nav-project">Import Tool</span>
+    <span class="nav-logo-wrap">
+      <a href="http://192.168.178.201" class="nav-back">← Zurück</a>
+      <img class="nav-logo" src="/shared/design/logo/hotelfriend-white.svg"
+           onerror="this.style.display='none'" alt="HotelFriend">
+    </span>
+  </nav>
+
+  <div class="page-wrap">
+
+    <!-- Header -->
+    <div class="page-header">
+      <h1>HotelFriend Import Tool</h1>
+      <span id="stepBadge" class="badge badge-neutral">Schritt 1 von 4</span>
+    </div>
+
+    <!-- Screen 1: Upload -->
+    <div id="screen1" class="screen active card">
+      <h2>Datei hochladen</h2>
+      <p class="muted" style="margin-bottom:20px">Wähle den Importtyp und lade deine Exportdatei hoch.</p>
+      <div class="form-group">
+        <label>Hotelname <span class="hint">(für den Dateinamen)</span></label>
+        <input type="text" id="hotelName" placeholder="z.B. Hotel Seeblick">
+      </div>
+      <div class="form-group">
+        <label>Entitätstyp</label>
+        <select id="entityType">
+          <option value="guest">Gäste</option>
+          <option value="company">Firmen / Gruppen</option>
+          <option value="reservation">Reservierungen</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Datei</label>
+        <div class="drop-zone" id="dropZone">
+          <p>CSV, TXT, XLS, XLSX oder HS3-Backup (.hsb) hierher ziehen</p>
+          <p style="font-size:12px;margin-bottom:12px">oder</p>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInput').click()">
+            Datei auswählen
+          </button>
+          <input type="file" id="fileInput" accept=".csv,.txt,.xls,.xlsx,.hsb,.fdb">
+          <p id="fileName" style="margin-top:10px;font-size:12px"></p>
+          <p id="hs3Badge" class="d-none" style="margin-top:6px">
+            <span class="badge badge-info">HS3 Direktimport — Spaltenzuordnung wird übersprungen</span>
+          </p>
+        </div>
+      </div>
+      <div id="uploadError" class="alert alert-danger d-none"></div>
+      <div class="btn-row">
+        <button id="btnUpload" class="btn btn-primary" disabled>Weiter →</button>
+        <button id="btnDownloadAll" class="btn btn-success d-none" type="button">Alle Typen exportieren ↓</button>
+      </div>
+    </div>
+
+    <!-- Screen 2: Column Mapping -->
+    <div id="screen2" class="screen card">
+      <h2>Spalten zuordnen</h2>
+      <p class="muted" style="margin-bottom:16px">Ordne jede Quellspalte einem HotelFriend-Feld zu. Pflichtfelder sind rot markiert.</p>
+      <div id="mappingWarning" class="alert alert-warning d-none">
+        Nicht alle Pflichtfelder sind zugeordnet.
+      </div>
+      <div id="customFieldHint" class="alert alert-info d-none" style="margin-bottom:12px">
+        Felder, die hier nicht aufgelistet sind (z.&nbsp;B. benutzerdefinierte Sonderfelder), müssen zuerst in HotelFriend unter <strong>Einstellungen → Gäste → Sonderfelder</strong> angelegt werden — erst dann können sie beim Import zugeordnet werden.
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Quellspalte</th><th>→ HotelFriend Feld</th><th>Vorschau (erste Zeile)</th></tr>
+          </thead>
+          <tbody id="mappingTable"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="showScreen(1)">← Zurück</button>
+        <button id="btnValidate" class="btn btn-primary">Prüfen & Weiter →</button>
+      </div>
+    </div>
+
+    <!-- Screen 4: Zimmerzuordnung (Reservierungen) -->
+    <div id="screen4" class="screen card">
+      <h2>Zimmerzuordnung</h2>
+      <p class="muted" style="margin-bottom:20px">
+        Ordne Zimmer und Zimmertypen aus der Importdatei den Werten in HotelFriend zu.
+        Leer lassen = Originalwert wird unverändert übernommen.
+      </p>
+
+      <div class="card-inner">
+        <div class="card-inner-label">Zimmerliste aus HotelFriend einfügen <span class="hint">(optional — für automatische Zuordnung)</span></div>
+        <p class="muted" style="margin-bottom:10px">Kopiere die Zimmerliste aus HotelFriend (Tabelle markieren → Strg+C) und füge sie hier ein.</p>
+        <textarea id="hfRoomPaste" rows="4" placeholder="Hier einfügen (Strg+V)…" spellcheck="false" style="margin-bottom:10px"></textarea>
+        <button class="btn btn-secondary btn-sm" id="btnParseHFRooms" type="button">Einlesen & Zuordnung vorausfüllen</button>
+        <div id="hfRoomParseInfo" class="muted d-none" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section-label">Zimmer</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Zimmer (Quelle)</th><th>→ Zimmername in HotelFriend</th></tr></thead>
+          <tbody id="zimmerMappingTable"></tbody>
+        </table>
+      </div>
+
+      <div class="section-label">Zimmertyp</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Zimmertyp (Quelle)</th><th>→ Zimmertyp in HotelFriend</th></tr></thead>
+          <tbody id="zimmerTypMappingTable"></tbody>
+        </table>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btnBackZimmer">← Zurück</button>
+        <button class="btn btn-primary" id="btnZimmerWeiter">Prüfen & Weiter →</button>
+      </div>
+    </div>
+
+    <!-- Screen 3a: Error Correction -->
+    <div id="screen3a" class="screen card">
+      <h2>Prüfen & bearbeiten</h2>
+      <div id="validationSummary" class="alert alert-info" style="margin-top:16px"></div>
+      <div id="errorTable"></div>
+      <div style="margin-top:12px">
+        <button class="btn btn-ghost btn-sm" id="btnToggleValid" type="button">
+          Alle Zeilen anzeigen & bearbeiten ▾
+        </button>
+        <div id="validTable" style="display:none;margin-top:8px"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btnBack3a">← Zurück</button>
+        <button id="btnSkipNoEmail" class="btn btn-warning-outline d-none">Alle ohne E-Mail überspringen</button>
+        <button id="btnSkipDupEmails" class="btn btn-warning-outline d-none">Duplikate überspringen</button>
+        <button id="btnClearDupEmails" class="btn btn-warning-outline d-none">Duplikat-E-Mails löschen</button>
+        <button id="btnRevalidate" class="btn btn-warning">Erneut prüfen</button>
+        <button id="btnDownload" class="btn btn-success d-none">Herunterladen ↓</button>
+        <button id="btnDownloadAll3a" class="btn btn-success d-none" type="button">Alle Typen exportieren ↓</button>
+      </div>
+    </div>
+
+    <!-- Screen 3b: Download -->
+    <div id="screen3b" class="screen card">
+      <h2>Export</h2>
+      <div id="downloadSummary" class="alert alert-success" style="margin-top:16px"></div>
+      <div class="btn-row">
+        <button id="btnDoDownload" class="btn btn-success btn-lg">CSV herunterladen ↓</button>
+        <button class="btn btn-secondary" onclick="showScreen('3a')">← Zurück</button>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const S = {
+  entityType: "guest",
+  source: "csv",        // "csv" | "hs3" | "mews"
+  zimmerMapping: {},    // {sourceZimmerName: hfZimmerName}
+  zimmerTypMapping: {}, // {sourceZimmertyp: hfZimmertyp}
+  hfRooms: [],          // [{name, type}] parsed from HotelFriend room list paste
+  allRows: [],
+  columns: [],
+  preview: [],
+  targetFields: [],
+  mapping: {},        // {srcCol: targetField}
+  validRows: [],
+  errorRows: [],        // [{row_index, row_data, errors}]
+  corrections: {},      // {row_index: {field: value}}  — error row corrections
+  validCorrections: {}, // {row_index: {field: value}}  — valid row edits
+  skipped: new Set(),
+  _skippedRows: [],
+};
+
+// ── Screen navigation ──────────────────────────────────────────────
+function showScreen(n) {
+  document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
+  const id = n === "3a" ? "screen3a" : n === "3b" ? "screen3b" : n === "4" ? "screen4" : `screen${n}`;
+  document.getElementById(id).classList.add("active");
+  const labels = {1:"Schritt 1 von 4",2:"Schritt 2 von 4","4":"Zimmerzuordnung","3a":"Schritt 3 von 4","3b":"Schritt 4 von 4"};
+  document.getElementById("stepBadge").textContent = labels[n] || "";
+  // Show "Alle Typen" button on 3a for pre-mapped sources (HS3 / Mews)
+  const isPreMapped = S.source === "hs3" || S.source === "mews";
+  document.getElementById("btnDownloadAll3a").classList.toggle("d-none", !(n === "3a" && isPreMapped));
+}
+
+// ── Screen 1: Upload ───────────────────────────────────────────────
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+let selectedFile = null;
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragover");
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById("fileName").textContent = file.name;
+  document.getElementById("btnUpload").disabled = false;
+  const isHs3 = file.name.toLowerCase().endsWith(".hsb") || file.name.toLowerCase().endsWith(".fdb");
+  document.getElementById("hs3Badge").classList.toggle("d-none", !isHs3);
+  // Show "Alle Typen" button immediately for HS3 (Mews XLSX needs server-side detection)
+  document.getElementById("btnDownloadAll").classList.toggle("d-none", !isHs3);
+}
+
+document.getElementById("btnUpload").addEventListener("click", async () => {
+  const btn = document.getElementById("btnUpload");
+  btn.disabled = true; btn.textContent = "Wird geladen…";
+  const errEl = document.getElementById("uploadError");
+  errEl.classList.add("d-none");
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+  fd.append("entity_type", document.getElementById("entityType").value);
+  S.entityType = document.getElementById("entityType").value;
+
+  const isHs3 = selectedFile.name.toLowerCase().endsWith(".hsb") ||
+                selectedFile.name.toLowerCase().endsWith(".fdb");
+
+  try {
+    if (isHs3) {
+      // HS3 direct import — skip column mapping, go straight to validation
+      btn.textContent = "HS3 wird eingelesen…";
+      const res = await fetch("/upload_hs3", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
+      if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
+
+      S.source = "hs3";
+      S.allRows = data.rows;
+      S.targetFields = [];  // not needed — rows already have HF field names
+
+      // Identity mapping: non-meta fields only (_-prefixed are internal)
+      // Collect all unique non-meta keys across ALL rows (first row may be missing fields like Zimmer)
+      const allKeys = new Set(S.allRows.flatMap(r => Object.keys(r).filter(f => !f.startsWith("_"))));
+      S.mapping = Object.fromEntries([...allKeys].map(f => [f, f]));
+
+      if (S.entityType === "reservation") {
+        buildZimmerScreen();
+        showScreen("4");
+      } else {
+        await validateAndShowErrors(S.allRows);
+        showScreen("3a");
+      }
+    } else {
+      const res = await fetch("/upload", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
+      if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
+
+      if (data.source === "mews") {
+        // Mews direct import — pre-mapped, skip column mapping
+        S.source = "mews";
+        S.allRows = data.rows;
+        S.targetFields = [];
+
+        const fields = S.allRows.length
+          ? Object.keys(S.allRows[0]).filter(f => !f.startsWith("_"))
+          : [];
+        S.mapping = Object.fromEntries(fields.map(f => [f, f]));
+
+        if (S.entityType === "reservation") {
+          buildZimmerScreen();
+          showScreen("4");
+        } else {
+          await validateAndShowErrors(S.allRows);
+          showScreen("3a");
+        }
+      } else {
+        S.source = "csv";
+        S.allRows = data.all_rows;
+        S.columns = data.columns;
+        S.preview = data.preview;
+        S.targetFields = data.target_fields;
+
+        // Apply suggestions as default mapping
+        S.mapping = {};
+        for (const [col, suggestion] of Object.entries(data.suggestions)) {
+          S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
+        }
+
+        buildMappingTable();
+        showScreen(2);
+      }
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("d-none");
+  } finally {
+    btn.disabled = false; btn.textContent = "Weiter →";
+  }
+});
+
+// ── Screen 2: Column Mapping ───────────────────────────────────────
+function buildMappingTable() {
+  const tbody = document.getElementById("mappingTable");
+
+  const options = [
+    '<option value="_ignore">— ignorieren —</option>',
+    ...S.targetFields.map(f => {
+      const label = f.required ? `${f.name} *` : f.name;
+      return `<option value="${f.name}">${label}</option>`;
+    })
+  ].join("");
+
+  tbody.innerHTML = S.columns.map(col => {
+    const previewVal = S.preview[0]?.[col] ?? "";
+    const currentVal = S.mapping[col] || "_ignore";
+    return `<tr>
+      <td class="fw-semibold">${col}</td>
+      <td>
+        <select class="form-select form-select-sm mapping-select" data-col="${col}">
+          ${options}
+        </select>
+      </td>
+      <td class="text-muted small">${previewVal}</td>
+    </tr>`;
+  }).join("");
+
+  // Set saved mapping values
+  tbody.querySelectorAll(".mapping-select").forEach(sel => {
+    sel.value = S.mapping[sel.dataset.col] || "_ignore";
+    sel.addEventListener("change", () => {
+      S.mapping[sel.dataset.col] = sel.value;
+      checkRequiredMapped();
+      updateCustomFieldHint();
+    });
+  });
+  checkRequiredMapped();
+  updateCustomFieldHint();
+}
+
+function updateCustomFieldHint() {
+  const hint = document.getElementById("customFieldHint");
+  if (S.entityType !== "guest") { hint.classList.add("d-none"); return; }
+  const hasIgnored = Object.values(S.mapping).some(v => v === "_ignore");
+  hint.classList.toggle("d-none", !hasIgnored);
+}
+
+function checkRequiredMapped() {
+  const requiredFields = new Set(S.targetFields.filter(f => f.required).map(f => f.name));
+  const mappedTargets = new Set(Object.values(S.mapping).filter(v => v !== "_ignore"));
+  const allMapped = [...requiredFields].every(f => mappedTargets.has(f));
+  document.getElementById("btnValidate").disabled = !allMapped;
+  document.getElementById("mappingWarning").classList.toggle("d-none", allMapped);
+}
+
+document.getElementById("btnValidate").addEventListener("click", async () => {
+  const btn = document.getElementById("btnValidate");
+  btn.disabled = true; btn.textContent = "Prüfe…";
+  try {
+    if (S.entityType === "reservation") {
+      buildZimmerScreen();
+      showScreen("4");
+    } else {
+      await validateAndShowErrors(S.allRows);
+      showScreen("3a");
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = "Prüfen & Weiter →";
+  }
+});
+
+// ── Screen 3a: Error Correction ────────────────────────────────────
+async function validateAndShowErrors(rows) {
+  const res = await fetch("/validate", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ rows, entity_type: S.entityType, mapping: S.mapping }),
+  });
+  const data = await res.json();
+  S.validRows = data.valid_rows;
+  S.errorRows = data.error_rows;
+  renderErrorScreen();
+}
+
+function renderErrorScreen() {
+  const summary = document.getElementById("validationSummary");
+  const total = S.validRows.length + S.errorRows.length;
+
+  // Name-source stats (only for HS3 guest imports)
+  const allRows = [...S.validRows, ...S.errorRows.map(e => e.row_data)];
+  const hasNameSource = allRows.some(r => r._name_source);
+  let nameSourceHtml = "";
+  if (hasNameSource) {
+    const counts = {original: 0, derived_from_email: 0, placeholder: 0, none: 0};
+    allRows.forEach(r => { if (r._name_source) counts[r._name_source] = (counts[r._name_source] || 0) + 1; });
+    nameSourceHtml = `<div class="mt-2 small">
+      Namensauflösung:
+      <span class="badge bg-success">${counts.original} original</span>
+      ${counts.derived_from_email ? `<span class="badge bg-warning text-dark">${counts.derived_from_email} aus E-Mail abgeleitet</span>` : ""}
+      ${counts.placeholder ? `<span class="badge bg-secondary">${counts.placeholder} Vorname unbekannt (Platzhalter "-")</span>` : ""}
+      ${counts.none ? `<span class="badge bg-danger">${counts.none} kein Name</span>` : ""}
+    </div>`;
+  }
+
+  const mewsHint = (S.source === "mews") ? `
+    <div class="mt-2 small text-muted border-top pt-2">
+      ℹ️ Mews-Quelle: Der <em>Reservierungsbericht</em> enthält nur Buchungsdaten.
+      Für vollständige Gastprofile (Adresse, Geburtsdatum, Ausweisdaten) bitte zusätzlich
+      den <strong>Kundenbericht</strong> aus Mews exportieren und als CSV importieren.
+    </div>` : "";
+
+  summary.innerHTML = `
+    <strong>${S.validRows.length} von ${total} Zeilen korrekt.</strong>
+    ${S.errorRows.length > 0 ? ` <span class="text-danger">${S.errorRows.length} Zeile(n) mit Fehlern.</span>` : ""}
+    ${nameSourceHtml}
+    ${mewsHint}
+  `;
+
+  const container = document.getElementById("errorTable");
+  if (S.errorRows.length === 0) {
+    container.innerHTML = '<div class="alert alert-success">Keine Fehler — alle Zeilen sind importierbar.</div>';
+    document.getElementById("btnDownload").classList.remove("d-none");
+    return;
+  }
+
+  container.innerHTML = S.errorRows.map(row => {
+    const isSkipped = S.skipped.has(row.row_index);
+    const errorList = row.errors.map(e =>
+      `<li><strong>${e.field}:</strong> ${e.reason}</li>`
+    ).join("");
+
+    const visibleEntries = Object.entries(row.row_data).filter(([f]) => !f.startsWith("_"));
+    const hs3Id = row.row_data._hs3_id;
+    const hs3IdCell = hs3Id != null
+      ? `<td class="text-muted small align-middle" style="white-space:nowrap">${hs3Id}</td>`
+      : "";
+    const hs3IdHeader = hs3Id != null ? `<th class="small text-muted">HS3-ID</th>` : "";
+    const editableFields = visibleEntries.map(([f, val]) => {
+      const hasError = row.errors.some(e => e.field === f);
+      const correction = S.corrections[row.row_index]?.[f] ?? val;
+      return `<td class="${hasError ? "table-danger" : ""}">
+        <input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent"
+          data-row="${row.row_index}" data-field="${f}"
+          value="${correction.replace(/"/g, '&quot;')}" ${isSkipped ? "disabled" : ""}>
+      </td>`;
+    }).join("");
+
+    const fieldHeaders = visibleEntries.map(([f]) => `<th class="small">${f}</th>`).join("");
+
+    return `<div class="card mb-2 ${isSkipped ? "opacity-50" : "border-danger"}">
+      <div class="card-header d-flex justify-content-between align-items-center py-1">
+        <span class="small fw-semibold text-danger">Zeile ${row.row_index + 1}${row.row_data._hs3_id ? ` <span class="badge bg-secondary fw-normal">HS3-ID ${row.row_data._hs3_id}</span>` : ""}</span>
+        <div class="form-check mb-0">
+          <input class="form-check-input skip-check" type="checkbox" id="skip${row.row_index}"
+            data-row="${row.row_index}" ${isSkipped ? "checked" : ""}>
+          <label class="form-check-label small" for="skip${row.row_index}">Überspringen</label>
+        </div>
+      </div>
+      <div class="card-body py-2">
+        <ul class="small text-danger mb-2">${errorList}</ul>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead><tr>${hs3IdHeader}${fieldHeaders}</tr></thead>
+            <tbody><tr>${hs3IdCell}${editableFields}</tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Events: inline corrections
+  container.querySelectorAll("input[data-row]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const ri = parseInt(inp.dataset.row);
+      const f = inp.dataset.field;
+      if (!S.corrections[ri]) S.corrections[ri] = {};
+      S.corrections[ri][f] = inp.value;
+    });
+  });
+
+  // Events: skip checkboxes
+  container.querySelectorAll(".skip-check").forEach(chk => {
+    chk.addEventListener("change", () => {
+      const ri = parseInt(chk.dataset.row);
+      if (chk.checked) S.skipped.add(ri);
+      else S.skipped.delete(ri);
+      const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+      document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+    });
+  });
+
+  document.getElementById("btnDownload").classList.add("d-none");
+
+  // Show bulk-skip / bulk-fix buttons
+  const emailOnlyErrors = S.errorRows.filter(r =>
+    r.errors.every(e => e.field === "email")
+  );
+  const dupEmailErrors = S.errorRows.filter(r =>
+    r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))
+  );
+  document.getElementById("btnSkipNoEmail").classList.toggle("d-none", emailOnlyErrors.length === 0);
+  document.getElementById("btnSkipDupEmails").classList.toggle("d-none", dupEmailErrors.length === 0);
+  document.getElementById("btnClearDupEmails").classList.toggle("d-none", dupEmailErrors.length === 0);
+
+}
+
+document.getElementById("btnSkipNoEmail").addEventListener("click", () => {
+  S.errorRows.forEach(r => {
+    if (r.errors.every(e => e.field === "email")) S.skipped.add(r.row_index);
+  });
+  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+  renderErrorScreen();
+});
+
+document.getElementById("btnSkipDupEmails").addEventListener("click", () => {
+  S.errorRows.forEach(r => {
+    if (r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))) {
+      S.skipped.add(r.row_index);
+    }
+  });
+  const allHandled = S.errorRows.every(r => S.skipped.has(r.row_index));
+  document.getElementById("btnDownload").classList.toggle("d-none", !allHandled);
+  renderErrorScreen();
+});
+
+document.getElementById("btnClearDupEmails").addEventListener("click", async () => {
+  // Clear email field on all duplicate-email rows, then re-validate
+  S.errorRows.forEach(r => {
+    if (r.errors.some(e => e.field === "email" && e.reason.startsWith("Duplikat"))) {
+      if (!S.corrections[r.row_index]) S.corrections[r.row_index] = {};
+      S.corrections[r.row_index]["email"] = "";
+    }
+  });
+  // Trigger re-validate (same logic as btnRevalidate)
+  const correctedRows = S.allRows.map((row, i) => {
+    if (!S.corrections[i]) return row;
+    const corrected = { ...row };
+    if (S.source !== "csv") {
+      Object.assign(corrected, S.corrections[i]);
+    } else {
+      for (const [srcCol, targetField] of Object.entries(S.mapping)) {
+        if (S.corrections[i]?.[targetField] !== undefined) corrected[srcCol] = S.corrections[i][targetField];
+      }
+    }
+    return corrected;
+  });
+  S.corrections = {};
+  S.validCorrections = {};
+  S.skipped = new Set();
+  await validateAndShowErrors(applyZimmerMapping(correctedRows));
+});
+
+function renderValidTable() {
+  const container = document.getElementById("validTable");
+  if (!S.validRows.length) { container.innerHTML = ""; return; }
+  const fields = Object.keys(S.validRows[0]).filter(f => !f.startsWith("_"));
+  const headers = fields.map(f => `<th class="small">${f}</th>`).join("");
+  // Map valid rows back to their original allRows entries (for meta fields like _system_changes).
+  // error_rows carry row_index; the remaining indices (in order) are the valid rows.
+  const errorIndices = new Set(S.errorRows.map(e => e.row_index));
+  const validOriginals = S.allRows.filter((_, i) => !errorIndices.has(i));
+
+  const bodyRows = S.validRows.map((row, idx) => {
+    const sysChanges = {
+      ...((validOriginals[idx] || {})._system_changes || {}),
+      ...(row._system_changes || {}),
+    };
+    const cells = fields.map(f => {
+      const original  = String(row[f] ?? "");
+      const current   = String(S.validCorrections[idx]?.[f] ?? original);
+      const userEdit  = S.validCorrections[idx]?.[f] !== undefined && S.validCorrections[idx][f] !== original;
+      const sysChange = f in sysChanges;
+      const bgClass   = userEdit ? "table-info" : sysChange ? "table-warning" : "";
+      const hint      = userEdit
+        ? `<div class="text-muted" style="font-size:0.7em;white-space:nowrap">war: ${original || "—"}</div>`
+        : sysChange
+          ? `<div class="text-warning-emphasis" style="font-size:0.7em;white-space:nowrap">⚙ auto (war: ${sysChanges[f] || "—"})</div>`
+          : "";
+      return `<td class="${bgClass}">
+        <input type="text" class="form-control form-control-sm border-0 p-0 bg-transparent valid-edit"
+          data-idx="${idx}" data-field="${f}" data-original="${original.replace(/"/g, '&quot;')}"
+          value="${current.replace(/"/g, '&quot;')}">${hint}</td>`;
+    }).join("");
+    const rowChanged = S.validCorrections[idx] !== undefined;
+    const rowSys     = Object.keys(sysChanges).length > 0;
+    return `<tr class="${rowChanged ? "table-info" : rowSys ? "table-warning" : ""}" data-sys="${rowSys ? 1 : 0}">${cells}</tr>`;
+  }).join("");
+  container.innerHTML = `<div class="table-responsive" style="max-height:400px;overflow-y:auto">
+    <table class="table table-sm table-bordered table-hover mb-0">
+      <thead class="table-light sticky-top"><tr>${headers}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  </div>`;
+  container.querySelectorAll(".valid-edit").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const idx      = parseInt(inp.dataset.idx);
+      const f        = inp.dataset.field;
+      const original = inp.dataset.original;
+      if (!S.validCorrections[idx]) S.validCorrections[idx] = {};
+      S.validCorrections[idx][f] = inp.value;
+      // Highlight cell + show original hint live
+      const td = inp.closest("td");
+      const userChanged = inp.value !== original;
+      const sysChanged  = td.querySelector(".text-warning-emphasis") !== null;
+      td.classList.toggle("table-info",    userChanged);
+      td.classList.toggle("table-warning", !userChanged && sysChanged);
+      let hint = td.querySelector(".text-muted");
+      if (userChanged) {
+        if (!hint) { hint = document.createElement("div"); hint.className = "text-muted"; hint.style.cssText = "font-size:0.7em;white-space:nowrap"; td.appendChild(hint); }
+        hint.textContent = `war: ${original || "—"}`;
+      } else {
+        hint?.remove();
+      }
+      // Highlight row
+      const anyUserEdit = [...inp.closest("tbody").querySelectorAll(`input[data-idx="${idx}"]`)]
+        .some(i2 => i2.value !== i2.dataset.original);
+      const row = inp.closest("tr");
+      row.classList.toggle("table-info",    anyUserEdit);
+      row.classList.toggle("table-warning", !anyUserEdit && row.dataset.sys === "1");
+    });
+  });
+}
+
+document.getElementById("btnToggleValid").addEventListener("click", () => {
+  const vt = document.getElementById("validTable");
+  const btn = document.getElementById("btnToggleValid");
+  if (vt.style.display === "none") {
+    renderValidTable();
+    vt.style.display = "";
+    btn.textContent = `Alle Zeilen ausblenden ▴`;
+  } else {
+    vt.style.display = "none";
+    btn.textContent = `Alle Zeilen anzeigen & bearbeiten ▾`;
+  }
+});
+
+// Back button on 3a: go to mapping (CSV) or upload (HS3)
+document.getElementById("btnBack3a").addEventListener("click", () => {
+  // Reset valid table toggle state
+  const vt = document.getElementById("validTable");
+  const btnToggle = document.getElementById("btnToggleValid");
+  vt.style.display = "none";
+  vt.innerHTML = "";
+  btnToggle.textContent = "Alle Zeilen anzeigen & bearbeiten ▾";
+  S.validCorrections = {};
+
+  if (S.entityType === "reservation") {
+    buildZimmerScreen();
+    showScreen("4");
+  } else {
+    showScreen(S.source === "csv" ? 2 : 1);
+  }
+});
+
+document.getElementById("btnRevalidate").addEventListener("click", async () => {
+  // Apply corrections back into rows
+  const correctedRows = S.allRows.map((row, i) => {
+    if (!S.corrections[i]) return row;
+    const corrected = { ...row };
+    if (S.source !== "csv") {
+      // Rows already use HF field names — apply corrections directly
+      Object.assign(corrected, S.corrections[i]);
+    } else {
+      for (const [srcCol, targetField] of Object.entries(S.mapping)) {
+        if (S.corrections[i]?.[targetField] !== undefined) {
+          corrected[srcCol] = S.corrections[i][targetField];
+        }
+      }
+    }
+    return corrected;
+  });
+  S.corrections = {};
+  S.validCorrections = {};
+  S.skipped = new Set();
+  await validateAndShowErrors(applyZimmerMapping(correctedRows));
+});
+
+document.getElementById("btnDownload").addEventListener("click", () => {
+  // Apply valid row corrections before export
+  S.validRows = S.validRows.map((row, idx) => {
+    if (!S.validCorrections[idx]) return row;
+    return { ...row, ...S.validCorrections[idx] };
+  });
+  S.validCorrections = {};
+  const skippedRows = S.errorRows
+    .filter(r => S.skipped.has(r.row_index))
+    .map(r => ({ ...r.row_data, _fehler: r.errors.map(e => `${e.field}: ${e.reason}`).join("; ") }));
+  S._skippedRows = skippedRows;
+  showScreen("3b");
+  const total = S.validRows.length;
+  const skipped = skippedRows.length;
+  document.getElementById("downloadSummary").innerHTML =
+    `<strong>${total} Zeile(n) exportiert${skipped ? `, ${skipped} übersprungen` : ""}.</strong>
+    ${total > 100 ? " Die Datei wird automatisch in Teile à 100 Zeilen aufgeteilt (ZIP)." : ""}`;
+});
+
+function _filePrefix() {
+  const name = document.getElementById("hotelName").value.trim();
+  if (!name) return "";
+  return name.replace(/[^\wäöüÄÖÜß\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") + "_";
+}
+
+// ── Screen 3b: Download ────────────────────────────────────────────
+document.getElementById("btnDoDownload").addEventListener("click", async () => {
+  const btn = document.getElementById("btnDoDownload");
+  btn.disabled = true; btn.textContent = "Wird erstellt…";
+  try {
+    const res = await fetch("/download", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        valid_rows: S.validRows,
+        skipped_rows: S._skippedRows || [],
+        entity_type: S.entityType,
+      }),
+    });
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const nameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const serverName = nameMatch ? nameMatch[1] : `${S.entityType}_import.csv`;
+    const filename = _filePrefix() + serverName;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } finally {
+    btn.disabled = false; btn.textContent = "CSV herunterladen ↓";
+  }
+});
+
+// ── Alle Typen exportieren ──────────────────────────────────────────
+async function downloadAll(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Wird erstellt…";
+  try {
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    const res = await fetch("/download_all", { method: "POST", body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || `Fehler ${res.status}`);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = _filePrefix() + selectedFile.name.replace(/\.[^.]+$/, "_alle.zip");
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+// ── Screen 4: Zimmerzuordnung ───────────────────────────────────────
+function _srcColFor(hfField) {
+  // For CSV: find source column mapped to hfField; for HS3/Mews: field name is used directly
+  return S.source === "csv"
+    ? (Object.keys(S.mapping).find(k => S.mapping[k] === hfField) || hfField)
+    : hfField;
+}
+
+const _PLACEHOLDER = /^(-|—|keine angabe|n\/a|unbekannt|nicht angegeben|none|null|undefined)$/i;
+
+function applyZimmerMapping(rows) {
+  let result = rows;
+  const zimCol = _srcColFor("Zimmer");
+  const typCol = _srcColFor("Zimmertyp");
+
+  // Blank out placeholder values in Zimmer (field is optional — HF handles unallocated bookings)
+  result = result.map(row => {
+    const val = (row[zimCol] ?? "").trim();
+    if (_PLACEHOLDER.test(val)) return { ...row, [zimCol]: "" };
+    return row;
+  });
+
+  if (Object.keys(S.zimmerMapping).length) {
+    result = result.map(row => {
+      const val = row[zimCol] ?? "";
+      if (val in S.zimmerMapping && S.zimmerMapping[val] !== "") {
+        return { ...row, [zimCol]: S.zimmerMapping[val] };
+      }
+      return row;
+    });
+  }
+  if (Object.keys(S.zimmerTypMapping).length) {
+    result = result.map(row => {
+      const val = row[typCol] ?? "";
+      if (val in S.zimmerTypMapping && S.zimmerTypMapping[val] !== "") {
+        return { ...row, [typCol]: S.zimmerTypMapping[val] };
+      }
+      return row;
+    });
+  }
+  return result;
+}
+
+// ── HotelFriend room list parser ────────────────────────────────────
+function parseHFRoomList(text) {
+  // Format copied from HotelFriend rooms table:
+  // header line(s) → then per room: name-line / area+TAB+type / status-line
+  const lines = text.split(/\r?\n/);
+  const rooms = [];
+
+  // Skip header rows (contain "Name", "Area", "Type", "Status" etc.)
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i].replace(/\t/g, " ").trim().toLowerCase();
+    if (l.includes("name") || l.includes("area") || l.includes("floor") || l.includes("status") || l === "") {
+      i++; continue;
+    }
+    break;
+  }
+
+  while (i < lines.length) {
+    const nameLine = lines[i].trim();
+    if (!nameLine) { i++; continue; }
+
+    // Check if next line is tab-separated (area\ttype\t...)
+    const nextLine = (lines[i + 1] || "").trim();
+    const afterLine = (lines[i + 2] || "").trim();
+
+    if (nextLine.includes("\t")) {
+      const parts = nextLine.split("\t").map(p => p.trim());
+      // parts[0] = area ("16 sq.m."), parts[1] = type ("Doppelzimmer (Double)")
+      const type = parts.find(p => p && !p.includes("sq.m.") && !/^active$/i.test(p)) || "";
+      if (type) rooms.push({ name: nameLine, type });
+      // skip name + data + optional status line
+      i += /^active$/i.test(afterLine) ? 3 : 2;
+    } else {
+      // Might be a tab-separated single-line format: name\tarea\ttype\t...
+      const cols = nameLine.split("\t").map(c => c.trim());
+      if (cols.length >= 3) {
+        rooms.push({ name: cols[0], type: cols[2] });
+      }
+      i++;
+    }
+  }
+  return rooms;
+}
+
+function _autoMatch(source, options) {
+  if (!options.length) return "";
+  const s = source.trim().toLowerCase();
+  // 1. Exact match
+  const exact = options.find(o => o.toLowerCase() === s);
+  if (exact) return exact;
+  // 2. Option starts with source (e.g. "Einzelzimmer" → "Einzelzimmer (Single)")
+  const fwd = options.find(o => o.toLowerCase().startsWith(s));
+  if (fwd) return fwd;
+  // 3. Source starts with option
+  const rev = options.find(o => s.startsWith(o.toLowerCase()));
+  if (rev) return rev;
+  // 4. Shared leading words (e.g. "Doppelzimmer Balkon" vs "Doppelzimmer mit Balkon (Double)")
+  const srcWords = s.split(/\s+/).filter(w => w.length > 3);
+  if (srcWords.length) {
+    const wordMatch = options.find(o => {
+      const oLower = o.toLowerCase();
+      return srcWords.every(w => oLower.includes(w));
+    });
+    if (wordMatch) return wordMatch;
+    // At least half the words match
+    const partial = options.find(o => {
+      const oLower = o.toLowerCase();
+      const hits = srcWords.filter(w => oLower.includes(w));
+      return hits.length >= Math.ceil(srcWords.length / 2);
+    });
+    if (partial) return partial;
+  }
+  return "";
+}
+
+function _buildMappingSubTable(tbodyId, stateKey, srcRows, srcCol, hfOptions) {
+  const _SKIP = /^(-|—|keine angabe|n\/a|unbekannt|nicht angegeben|none|null|undefined)$/i;
+  const unique = [...new Set(
+    srcRows.map(r => (r[srcCol] ?? "").trim()).filter(v => v && !_SKIP.test(v))
+  )].sort();
+  const tbody = document.getElementById(tbodyId);
+  const listId = tbodyId + "DL";
+
+  // Datalist must live in <body>, not inside <tbody> (invalid HTML → browsers ignore it)
+  const oldDl = document.getElementById(listId);
+  if (oldDl) oldDl.remove();
+  if (hfOptions.length) {
+    const dl = document.createElement("datalist");
+    dl.id = listId;
+    hfOptions.forEach(o => { const opt = document.createElement("option"); opt.value = o; dl.appendChild(opt); });
+    document.body.appendChild(dl);
+  }
+  const datalist = "";
+
+  tbody.innerHTML = datalist + unique.map(z => {
+    const auto   = _autoMatch(z, hfOptions);
+    const stored = S[stateKey][z];
+    const val    = stored !== undefined ? stored : auto;
+    // Visual state: confirmed (in HF list), remapped (auto ≠ source), no-match
+    const inHF     = hfOptions.length && hfOptions.some(o => o.toLowerCase() === (val || z).toLowerCase());
+    const remapped = auto && auto.toLowerCase() !== z.toLowerCase();
+    const noMatch  = hfOptions.length && !auto;
+    const hint = noMatch
+      ? `<div class="text-danger" style="font-size:0.7em">⚠ kein Treffer in HotelFriend-Liste</div>`
+      : remapped
+        ? `<div class="text-success" style="font-size:0.7em">⚙ automatisch zugeordnet</div>`
+        : inHF
+          ? `<div class="text-success" style="font-size:0.7em">✓ in HotelFriend gefunden</div>`
+          : "";
+    const borderClass = noMatch ? " border-warning" : (inHF || remapped) ? " border-success" : "";
+    return `<tr>
+      <td class="fw-semibold align-middle">${z}</td>
+      <td>
+        <input type="text" class="form-control form-control-sm${borderClass}"
+          data-source="${z.replace(/"/g, '&quot;')}"
+          ${hfOptions.length ? `list="${listId}"` : ""}
+          value="${val.replace(/"/g, '&quot;')}"
+          placeholder="${z.replace(/"/g, '&quot;')}">
+        ${hint}
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Sync initial auto-matches into state
+  tbody.querySelectorAll("input[data-source]").forEach(inp => {
+    const src = inp.dataset.source;
+    if (S[stateKey][src] === undefined && inp.value) S[stateKey][src] = inp.value;
+    inp.addEventListener("input", () => { S[stateKey][src] = inp.value; });
+  });
+}
+
+function buildZimmerScreen() {
+  const hfNames = [...new Set(S.hfRooms.map(r => r.name))].sort();
+  const hfTypes = [...new Set(S.hfRooms.map(r => r.type))].sort();
+  _buildMappingSubTable("zimmerMappingTable",    "zimmerMapping",    S.allRows, _srcColFor("Zimmer"),    hfNames);
+  _buildMappingSubTable("zimmerTypMappingTable", "zimmerTypMapping", S.allRows, _srcColFor("Zimmertyp"), hfTypes);
+}
+
+document.getElementById("btnParseHFRooms").addEventListener("click", () => {
+  const text = document.getElementById("hfRoomPaste").value;
+  const rooms = parseHFRoomList(text);
+  const info  = document.getElementById("hfRoomParseInfo");
+  if (!rooms.length) {
+    info.innerHTML = "Keine Zimmer erkannt. Bitte prüfe das Format.";
+    info.className = "mt-2 small text-danger";
+  } else {
+    const names = [...new Set(rooms.map(r => r.name))].sort();
+    const types = [...new Set(rooms.map(r => r.type))].sort();
+    info.innerHTML = `<strong>${rooms.length} Zimmer erkannt, ${types.length} Zimmertyp(en).</strong><br>
+      <span class="text-muted">Zimmer: ${names.join(", ")}</span><br>
+      <span class="text-muted">Typen: ${types.join(" · ")}</span>`;
+    info.className = "mt-2 small text-success";
+    // Reset mappings so auto-match can re-run cleanly
+    S.hfRooms = rooms;
+    S.zimmerMapping = {};
+    S.zimmerTypMapping = {};
+    buildZimmerScreen();
+  }
+  info.classList.remove("d-none");
+});
+
+document.getElementById("btnBackZimmer").addEventListener("click", () => {
+  showScreen(S.source === "csv" ? 2 : 1);
+});
+
+document.getElementById("btnZimmerWeiter").addEventListener("click", async () => {
+  const btn = document.getElementById("btnZimmerWeiter");
+  btn.disabled = true; btn.textContent = "Prüfe…";
+  try {
+    await validateAndShowErrors(applyZimmerMapping(S.allRows));
+    showScreen("3a");
+  } finally {
+    btn.disabled = false; btn.textContent = "Prüfen & Weiter →";
+  }
+});
+
+document.getElementById("btnDownloadAll").addEventListener("click", function() {
+  downloadAll(this);
+});
+
+document.getElementById("btnDownloadAll3a").addEventListener("click", function() {
+  downloadAll(this);
+});
+</script>
+</body>
+</html>

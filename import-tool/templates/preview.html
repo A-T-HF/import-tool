@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Import Tool — Vorschau Redesign</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --primary:       #2a6fdb;
+      --primary-hover: #1e5bbf;
+      --primary-light: #ddeaff;
+      --accent:        #3b9eff;
+      --accent-light:  #e8f4ff;
+      --success:       #1a9e5c;
+      --success-light: #d4f0e3;
+      --warning:       #d97706;
+      --warning-light: #fef3c7;
+      --danger:        #dc2626;
+      --danger-light:  #fee2e2;
+      --text:          #0b1b3a;
+      --text-muted:    #4a5878;
+      --border:        #dde3ee;
+      --bg:            #f4f6fb;
+      --white:         #ffffff;
+      --disabled:      #b0bac8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: linear-gradient(90deg, var(--text) 0%, var(--text-muted) 100%);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-project {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: .01em;
+    }
+    .nav-logo-wrap { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .nav-logo { height: 20px; opacity: .85; filter: brightness(0) invert(1); }
+    .nav-back {
+      display: inline-flex; align-items: center;
+      padding: 4px 12px;
+      font-size: 12.5px; font-weight: 500;
+      color: #fff; letter-spacing: .02em;
+      text-decoration: none;
+      background: rgba(59,158,255,.25);
+      border: 1px solid rgba(59,158,255,.5);
+      border-radius: 20px;
+      white-space: nowrap;
+      transition: background .15s, border-color .15s;
+    }
+    .nav-back:hover { background: rgba(59,158,255,.45); border-color: rgba(59,158,255,.8); }
+
+    /* ── Layout ── */
+    .page-wrap { max-width: 820px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    /* ── Step header ── */
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .step-header h1 { font-size: 20px; font-weight: 700; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px;
+      font-size: 11px; font-weight: 700;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .badge-neutral { background: #e5e7eb; color: #374151; }
+    .badge-info    { background: var(--primary-light); color: var(--primary); }
+    .badge-success { background: var(--success-light); color: var(--success); }
+    .badge-warning { background: var(--warning-light); color: var(--warning); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 16px; font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card .desc {
+      font-size: 13px; color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .card-inner {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: 12.5px; font-weight: 600;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+    label .hint { font-weight: 400; color: var(--text-muted); }
+    input[type=text], select, textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: inherit; font-size: 13.5px;
+      color: var(--text);
+      background: var(--white);
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .drop-zone:hover { border-color: var(--primary); background: var(--primary-light); }
+    .drop-zone .hint { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+    .drop-zone .hint-small { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+    .file-name { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px;
+      font-family: inherit; font-size: 13.5px; font-weight: 500;
+      border-radius: 6px; border: 1px solid transparent;
+      cursor: pointer; transition: background .15s, border-color .15s;
+      text-decoration: none; white-space: nowrap;
+    }
+    .btn-sm { padding: 4px 12px; font-size: 12.5px; }
+    .btn-primary  { background: var(--primary); color: var(--white); }
+    .btn-primary:hover  { background: var(--primary-hover); color: var(--white); }
+    .btn-secondary { background: var(--white); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border-color: var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+    .btn-success { background: var(--success); color: var(--white); border-color: var(--success); }
+    .btn-warning-outline { background: var(--white); color: var(--warning); border-color: var(--warning); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+
+    /* ── Alerts ── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      border-left: 4px solid transparent;
+      font-size: 13.5px;
+      margin-bottom: 16px;
+    }
+    .alert-info    { background: var(--primary-light); border-color: var(--primary); }
+    .alert-warning { background: var(--warning-light); border-color: var(--warning); }
+    .alert-danger  { background: var(--danger-light);  border-color: var(--danger); }
+
+    /* ── Tables ── */
+    .table-wrap {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+      margin-bottom: 16px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 10px 14px;
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+    td.error { background: var(--danger-light); }
+    td.auto  { background: var(--warning-light); }
+    td select { background: var(--white); }
+
+    /* ── Screen labels ── */
+    .screen-label {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* ── Preview note ── */
+    .preview-banner {
+      background: var(--accent-light);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 28px;
+    }
+
+    hr.screen-divider {
+      border: none;
+      border-top: 2px dashed var(--border);
+      margin: 32px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a class="nav-project" href="/">Import Tool</a>
+    <span class="nav-logo-wrap">
+      <a href="http://192.168.178.201" class="nav-back">← Zurück</a>
+      <img class="nav-logo" src="/shared/design/logo/hotelfriend-white.svg"
+           onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'HotelFriend',style:'color:rgba(255,255,255,.7);font-size:13px;font-weight:700;letter-spacing:.05em'}))"
+           alt="HotelFriend">
+    </span>
+  </nav>
+
+  <div class="page-wrap">
+
+    <div class="preview-banner">
+      ⚙ <strong>Design-Vorschau</strong> — statischer Mockup mit HotelFriend Intranet Styleguide. Alle Screens untereinander dargestellt.
+    </div>
+
+    <!-- ── Screen 1: Upload ── -->
+    <div class="screen-label">Schritt 1 von 4</div>
+    <div class="card">
+      <h2>Datei hochladen</h2>
+      <p class="desc">Wähle den Importtyp und lade deine Exportdatei hoch.</p>
+
+      <div class="form-group">
+        <label>Hotelname <span class="hint">(für den Dateinamen)</span></label>
+        <input type="text" placeholder="z.B. Hotel Seeblick">
+      </div>
+
+      <div class="form-group">
+        <label>Entitätstyp</label>
+        <select>
+          <option>Gäste</option>
+          <option>Firmen / Gruppen</option>
+          <option>Reservierungen</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Datei</label>
+        <div class="drop-zone">
+          <p class="hint">CSV, XLS, XLSX oder HS3-Backup (.hsb) hierher ziehen</p>
+          <p class="hint-small">oder</p>
+          <button class="btn btn-secondary btn-sm">Datei auswählen</button>
+          <p class="file-name">gaesteexport.csv</p>
+        </div>
+        <div style="margin-top:8px">
+          <span class="badge badge-info">HS3 Direktimport — Spaltenzuordnung wird übersprungen</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary">Weiter →</button>
+        <button class="btn btn-success btn-sm">Alle Typen exportieren ↓</button>
+      </div>
+    </div>
+
+    <hr class="screen-divider">
+
+    <!-- ── Screen 2: Column Mapping ── -->
+    <div class="screen-label">Schritt 2 von 4</div>
+    <div class="card">
+      <h2>Spalten zuordnen</h2>
+      <p class="desc">Ordne jede Quellspalte einem HotelFriend-Feld zu. Pflichtfelder sind fett markiert.</p>
+
+      <div class="alert alert-warning">
+        Nicht alle Pflichtfelder sind zugeordnet: <strong>first_name</strong>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Quellspalte</th>
+              <th>→ HotelFriend Feld</th>
+              <th>Vorschau</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Vorname</td>
+              <td><select><option>first_name ✱</option></select></td>
+              <td style="color:var(--text-muted)">Max</td>
+            </tr>
+            <tr>
+              <td>Nachname</td>
+              <td><select><option>last_name ✱</option></select></td>
+              <td style="color:var(--text-muted)">Müller</td>
+            </tr>
+            <tr>
+              <td>E-Mail</td>
+              <td><select><option>email</option></select></td>
+              <td style="color:var(--text-muted)">max@example.com</td>
+            </tr>
+            <tr>
+              <td>Land</td>
+              <td><select><option>country</option></select></td>
+              <td style="color:var(--text-muted)">Deutschland</td>
+            </tr>
+            <tr>
+              <td>Interne Notiz</td>
+              <td><select><option>— ignorieren —</option></select></td>
+              <td style="color:var(--text-muted); font-style:italic">wird nicht importiert</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary">← Zurück</button>
+        <button class="btn btn-primary">Prüfen & Weiter →</button>
+      </div>
+    </div>
+
+    <hr class="screen-divider">
+
+    <!-- ── Screen 3a: Error Correction ── -->
+    <div class="screen-label">Schritt 3 von 4</div>
+    <div class="card">
+      <h2>Prüfen & bearbeiten</h2>
+
+      <div class="alert alert-info">
+        <strong>847 Zeilen importierbar</strong> · 3 Zeilen mit Fehlern · 2 Duplikate
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Überspringen</th>
+              <th>first_name</th>
+              <th>last_name</th>
+              <th>email</th>
+              <th>country</th>
+              <th>Fehler</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="error"><input type="text" value="" style="width:100%;border:none;background:transparent"></td>
+              <td>Schulze</td>
+              <td>schulze@beispiel.de</td>
+              <td>DE</td>
+              <td><span class="badge badge-danger">first_name: Pflichtfeld fehlt</span></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Lena</td>
+              <td>Braun</td>
+              <td class="error">kein-email</td>
+              <td>AT</td>
+              <td><span class="badge badge-danger">email: Ungültiges Format</span></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="auto">Max <div style="font-size:11px;color:var(--warning)">⚙ auto (war: —)</div></td>
+              <td>Müller</td>
+              <td class="error">max.mueller@example.com</td>
+              <td>DE</td>
+              <td><span class="badge badge-warning">email: Duplikat</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary">← Zurück</button>
+        <button class="btn btn-ghost">Alle ohne E-Mail überspringen</button>
+        <button class="btn btn-warning-outline">Duplikate überspringen</button>
+        <button class="btn btn-warning-outline">Duplikat-E-Mails löschen</button>
+        <button class="btn btn-primary">Erneut prüfen</button>
+        <button class="btn btn-success">Herunterladen ↓</button>
+      </div>
+    </div>
+
+    <hr class="screen-divider">
+
+    <!-- ── Screen 3b: Download ── -->
+    <div class="screen-label">Schritt 4 von 4</div>
+    <div class="card">
+      <h2>Export</h2>
+      <p class="desc">847 Zeilen exportiert · 3 übersprungen.</p>
+      <div class="alert alert-info">
+        Die Datei wird automatisch in Teile à 100 Zeilen aufgeteilt (ZIP), da mehr als 100 Zeilen vorhanden sind.
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary">CSV herunterladen ↓</button>
+        <button class="btn btn-secondary">← Zurück</button>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
