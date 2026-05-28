@@ -470,9 +470,9 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
       const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
       if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
 
-      if (data.source === "mews") {
-        // Mews direct import — pre-mapped, skip column mapping
-        S.source = "mews";
+      if (data.source === "mews" || data.source === "bookinglist") {
+        // Pre-mapped import (Mews / BookingList) — skip column mapping
+        S.source = data.source;
         S.allRows = data.rows;
         S.targetFields = [];
 
@@ -497,7 +497,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
 
         // Apply suggestions as default mapping
         S.mapping = {};
-        for (const [col, suggestion] of Object.entries(data.suggestions)) {
+        for (const [col, suggestion] of Object.entries(data.suggestions ?? {})) {
           S.mapping[col] = suggestion.score >= 60 ? suggestion.field : "_ignore";
         }
 
@@ -643,7 +643,7 @@ function renderErrorScreen() {
       `<li><strong>${e.field}:</strong> ${e.reason}</li>`
     ).join("");
 
-    const visibleEntries = Object.entries(row.row_data).filter(([f]) => !f.startsWith("_"));
+    const visibleEntries = Object.entries(row.row_data ?? {}).filter(([f]) => !f.startsWith("_"));
     const hs3Id = row.row_data._hs3_id;
     const hs3IdCell = hs3Id != null
       ? `<td class="text-muted small align-middle" style="white-space:nowrap">${hs3Id}</td>`
