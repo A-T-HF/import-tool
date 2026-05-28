@@ -9,6 +9,7 @@ import pandas as pd
 from transformer import get_fields, suggest_mapping, transform, ENTITY_TYPES
 from hs3_reader import read_hs3
 from mews_reader import is_mews_xlsx, read_mews
+from bookinglist_reader import is_bookinglist_xlsx, read_bookinglist
 
 
 def rows_to_csv_bytes(rows: list[dict]) -> bytes:
@@ -78,6 +79,18 @@ def upload():
                     "preview":     rows[:5],
                     "valid_count": len(rows),
                     "source":      "mews",
+                })
+            buf.seek(0)
+            if is_bookinglist_xlsx(buf):
+                buf.seek(0)
+                rows = read_bookinglist(buf, entity_type)
+                if not rows:
+                    return jsonify({"error": "Keine Datensätze gefunden."}), 400
+                return jsonify({
+                    "rows":        rows,
+                    "preview":     rows[:5],
+                    "valid_count": len(rows),
+                    "source":      "bookinglist",
                 })
             buf.seek(0)
             df = pd.read_excel(buf, dtype=str, keep_default_na=False)

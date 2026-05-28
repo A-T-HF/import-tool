@@ -224,6 +224,7 @@ _STATUS_MAP = {
     "no show": "no_show",
     "optional": "booking_offer",
     "angebot": "booking_offer",
+    "gebucht": "confirmed",
     # Protel / Gastrodat
     "angemeldet": "check_in",
     "abgereist": "check_out",
