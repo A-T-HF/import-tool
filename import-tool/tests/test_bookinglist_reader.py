@@ -1,5 +1,6 @@
 from bookinglist_reader import (
     _split_guest_name,
+    _split_unterkunft,
     _parse_date,
     _parse_address,
     _map_status,
@@ -62,6 +63,22 @@ def test_parse_address_empty():
     assert _parse_address("") == {}
 
 
+# ── _split_unterkunft ─────────────────────────────────────────────────────────
+
+def test_split_unterkunft_simple():
+    assert _split_unterkunft("1.8 Doppelzimmer") == ("1.8", "Doppelzimmer")
+
+def test_split_unterkunft_single():
+    assert _split_unterkunft("1.9 Einzelzimmer") == ("1.9", "Einzelzimmer")
+
+def test_split_unterkunft_connected_rooms():
+    assert _split_unterkunft("1.3 - 1.4 Familienzimmer") == ("1.3 - 1.4", "Familienzimmer")
+
+def test_split_unterkunft_no_match_returns_raw():
+    zimmer, typ = _split_unterkunft("Doppelzimmer")
+    assert zimmer == "" and typ == "Doppelzimmer"
+
+
 # ── _map_status ───────────────────────────────────────────────────────────────
 
 def test_map_status_gebucht():
@@ -109,7 +126,8 @@ def test_read_reservations_person():
     assert r["last_name"] == "Matzerath"
     assert r["Check In"] == "2026-06-04"
     assert r["Check Out"] == "2026-06-06"
-    assert r["Zimmertyp"] == "1.8 Doppelzimmer"
+    assert r["Zimmertyp"] == "Doppelzimmer"
+    assert r["Zimmer"] == "1.8"
     assert r["email"] == "g@example.com"
     assert r["Status"] == "confirmed"
     assert r["Summe"] == "123.12"

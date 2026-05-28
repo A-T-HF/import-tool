@@ -74,6 +74,7 @@ def _parse_date(v) -> str | None:
 
 
 _PLZ_STADT = re.compile(r"^(\d{4,5})\s+(.+)$")
+_UNTERKUNFT = re.compile(r"^([\d.]+(?:\s+-\s+[\d.]+)*)\s+(.+)$")
 
 def _parse_address(raw: str) -> dict:
     """
@@ -132,6 +133,18 @@ _STATUS_EXTRA = {
     "bestätigt": "confirmed",
 }
 
+def _split_unterkunft(raw: str) -> tuple[str, str]:
+    """
+    Split "1.8 Doppelzimmer" → ("1.8", "Doppelzimmer").
+    Handles "1.3 - 1.4 Familienzimmer" → ("1.3 - 1.4", "Familienzimmer").
+    Falls back to ("", raw) if pattern doesn't match.
+    """
+    m = _UNTERKUNFT.match(raw.strip())
+    if m:
+        return m.group(1), m.group(2)
+    return "", raw.strip()
+
+
 def _map_status(raw: str) -> str:
     s = raw.strip().lower()
     return _STATUS_MAP.get(s) or _STATUS_EXTRA.get(s) or ""
@@ -175,13 +188,17 @@ def _read_reservations(rows: list[dict]) -> list[dict]:
         if not last:
             sys["last_name"] = ""
 
+        zimmer_nr, zimmertyp = _split_unterkunft(_clean(row.get("Unterkunft", "")))
+
         r: dict = {
             "first_name": first or "-",
             "last_name":  last  or "-",
             "Check In":   _parse_date(row.get("Anreise")),
             "Check Out":  _parse_date(row.get("Abreise")),
-            "Zimmertyp":  _clean(row.get("Unterkunft")),
+            "Zimmertyp":  zimmertyp,
         }
+        if zimmer_nr:
+            r["Zimmer"] = zimmer_nr
 
         email = _clean(row.get("E-Mail"))
         if email:
