@@ -6,36 +6,40 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Firebird 5 embedded — für HS3-Backup-Restore ohne laufenden Server
-# Tarball enthält buildroot.tar.gz mit ./opt/firebird/... → direkt nach / extrahieren
 # tzdata: Plattform-Vertrag Europe/Berlin (/api/new-time)
+# libfbclient2 + firebird3.0-utils: Firebird 3.x Client für HS3-ODS-12.0-Datenbanken
+#   (Firebird 5.x unterstützt ODS 12.0 nicht mehr — daher gezielt 3.x)
+#   gbak: in firebird3.0-utils enthalten → /usr/bin/gbak
+#   libfbclient.so.2: in libfbclient2 enthalten → ld.so findet sie automatisch
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tzdata libtommath1 libtomcrypt1 \
-       $(apt-cache search '^libicu[0-9]' | awk '{print $1}' | grep -E '^libicu[0-9]+$' | sort -V | tail -1) \
-    && curl -fsSL \
-       "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.1/Firebird-5.0.1.1469-0-linux-x64.tar.gz" \
-       | tar -xzOf - "Firebird-5.0.1.1469-0-linux-x64/buildroot.tar.gz" \
-       | tar -xzf - -C / \
-    && chmod +x /opt/firebird/bin/* \
-    && echo "/opt/firebird/lib" > /etc/ld.so.conf.d/firebird.conf \
-    && ldconfig \
-    && apt-get purge -y --auto-remove curl \
+    && apt-get install -y --no-install-recommends tzdata libfbclient2 firebird3.0-utils \
     && rm -rf /var/lib/apt/lists/*
-
-ENV HS3_FIREBIRD_HOME=/opt/firebird \
-    LD_LIBRARY_PATH=/opt/firebird/lib
 
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
+# Nicht-Root-Benutzer anlegen (vor COPY, damit chown effizient läuft)
+RUN adduser --system --uid 10001 app
+
 COPY . .
 
-RUN useradd --system --uid 10001 app && chown -R app /app
+# Besitzer setzen — Container-Dateisystem ist read-only,
+# /tmp ist weiterhin beschreibbar (tmpfs gemountet durch die Plattform)
+RUN chown -R app /app
 USER app
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+# Healthcheck nutzt Python statt curl (kein Extra-Paket nötig).
+# Greift auf internen Port + unverschobenen Pfad /healthz zu.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/healthz',timeout=2); sys.exit(0 if r.status==200 else 1)"
 
-CMD ["sh", "-c", "cd /app/import-tool && gunicorn -w 2 -b 0.0.0.0:8000 app:app"]
+# ROOT_PATH wird von der Plattform als ENV gesetzt (/apps/{slug}).
+# Uvicorn übergibt ihn an den ASGI-Scope — dort gehört er hin, nicht im
+# FastAPI-Konstruktor (das würde die Route-Pfade verschieben und Nginx
+# Proxy-Stripping brechen).
+#
+# --forwarded-allow-ips='*': akzeptiert X-Forwarded-*-Header vom Nginx-Proxy
+# im Docker-Netz (kommt mit 172.x-Adresse, nicht 127.0.0.1).
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*' --root-path ${ROOT_PATH:-}"]
