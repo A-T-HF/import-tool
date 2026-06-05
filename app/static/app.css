@@ -1,0 +1,130 @@
+/* Import Tool — App-spezifische Stile.
+   Baut auf design-tokens.css + components.css auf.
+   Keine eigenen Farb-Hex-Werte — nur CSS-Variablen. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ── Layout ── */
+.page-wrap { max-width: 860px; margin: 0 auto; padding: 28px 24px 60px; }
+.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.page-header h1 { font-size: 20px; font-weight: 700; }
+
+/* ── Screens ── */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── Cards ── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+.card h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.card-inner {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.card-inner-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+/* ── Forms ── */
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+label .hint { font-weight: 400; color: var(--text-muted); }
+input[type=text], select, textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit; font-size: 13.5px;
+  color: var(--text); background: var(--white);
+  outline: none;
+  transition: border-color .15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+textarea { resize: vertical; min-height: 90px; font-family: monospace; }
+.field-required { color: var(--danger); font-weight: 600; }
+.muted { color: var(--text-muted); font-size: 12.5px; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.drop-zone.dragover { border-color: var(--primary); background: var(--primary-light); }
+.drop-zone input[type=file] { display: none; }
+.drop-zone p { color: var(--text-muted); font-size: 13px; margin-bottom: 6px; }
+
+/* ── Buttons (zusätzliche Varianten) ── */
+.btn-success { background: var(--success); color: var(--white); border-color: var(--success); }
+.btn-success:hover { background: var(--success); filter: brightness(0.88); color: var(--white); }
+.btn-warning { background: var(--warning); color: var(--white); border-color: var(--warning); }
+.btn-warning:hover { background: var(--warning); filter: brightness(0.88); color: var(--white); }
+.btn-warning-outline { background: var(--white); color: var(--warning); border-color: var(--warning); }
+.btn-warning-outline:hover { background: var(--warning-light); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+
+/* ── Tables ── */
+.table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+.table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; padding: 9px 12px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+}
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #fafbfd; }
+
+/* Row highlight classes */
+.table-warning { background: var(--warning-light) !important; }
+.table-info    { background: var(--primary-light) !important; }
+.table-danger  { background: var(--danger-light) !important; }
+
+/* Inline edit inputs inside table cells */
+td input[type=text] {
+  padding: 2px 4px; font-size: 13px;
+  border: 1px solid transparent; border-radius: 4px;
+  background: transparent; width: 100%;
+}
+td input[type=text]:focus { border-color: var(--primary); background: var(--white); }
+td select { padding: 3px 6px; font-size: 13px; }
+
+/* ── Utility ── */
+.d-none { display: none !important; }
+.section-label { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }
+.fw-semibold { font-weight: 600; }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger  { color: var(--danger); }
+.text-muted   { color: var(--text-muted); }
+.small        { font-size: 0.85em; }
+.border-success { border-color: var(--success) !important; }
+.border-warning { border-color: var(--warning) !important; }
+/* form-control / form-select: handled by base input/select rules above */
+.form-control { /* same as input[type=text] */ }
+.form-control-sm { padding: 2px 6px; font-size: 12.5px; }
+.form-select  { /* same as select */ }
+.form-select-sm { padding: 3px 6px; font-size: 12.5px; }
+.align-middle { vertical-align: middle !important; }
