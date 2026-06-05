@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from transformer import get_fields, suggest_mapping, transform, ENTITY_TYPES
 from hs3_reader import read_hs3
+from hs3_csv_reader import read_hs3_csv, is_hs3_csv_zip
 from mews_reader import is_mews_xlsx, read_mews
 from bookinglist_reader import is_bookinglist_xlsx, read_bookinglist
 
@@ -142,6 +143,35 @@ def upload_hs3():
         rows = read_hs3(tmp.name, entity_type)
     except Exception as e:
         return jsonify({"error": f"HS3-Datei konnte nicht gelesen werden: {e}"}), 400
+    finally:
+        os.unlink(tmp.name)
+
+    if not rows:
+        return jsonify({"error": "Keine Datensätze gefunden."}), 400
+
+    return jsonify({
+        "rows": rows,
+        "preview": rows[:5],
+        "valid_count": len(rows),
+        "source": "hs3",
+    })
+
+
+@app.route("/upload_hs3_csv", methods=["POST"])
+def upload_hs3_csv():
+    f = request.files.get("file")
+    entity_type = request.form.get("entity_type")
+    if not f or entity_type not in ENTITY_TYPES:
+        return jsonify({"error": "Ungültige Anfrage"}), 400
+
+    suffix = ".zip"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        f.save(tmp.name)
+        tmp.close()
+        rows = read_hs3_csv(tmp.name, entity_type)
+    except Exception as e:
+        return jsonify({"error": f"ZIP konnte nicht gelesen werden: {e}"}), 400
     finally:
         os.unlink(tmp.name)
 
