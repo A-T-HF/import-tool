@@ -28,7 +28,7 @@ def pad_to_schema(rows: list[dict], entity_type: str) -> list[dict]:
     return [{field: row.get(field, "") for field in fields} for row in rows]
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB (HSB-Backups bis ~30 MB)
+app.config["MAX_CONTENT_LENGTH"] = 700 * 1024 * 1024  # 700 MB (.fdb-Direktdateien bis ~600 MB)
 
 @app.get("/healthz")
 def healthz():
