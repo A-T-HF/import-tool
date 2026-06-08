@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 import shutil
 import tempfile
 import zipfile
@@ -224,6 +225,96 @@ async def upload_hs3_csv(
         ) from exc
     finally:
         os.unlink(tmp_name)
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="Keine Datensätze gefunden.")
+
+    return {
+        "rows":        rows,
+        "preview":     rows[:5],
+        "valid_count": len(rows),
+        "source":      "hs3",
+    }
+
+
+_UPLOAD_ID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+
+
+def _upload_dir(upload_id: str) -> Path:
+    if not _UPLOAD_ID_RE.match(upload_id):
+        raise HTTPException(status_code=400, detail="Ungültige upload_id")
+    return Path(tempfile.gettempdir()) / f"hs3_upload_{upload_id}"
+
+
+@app.post("/upload_chunk")
+async def upload_chunk(
+    chunk: UploadFile = File(...),
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    suffix: str = Form(...),
+):
+    """Nimmt einen Datei-Chunk entgegen und speichert ihn in /tmp.
+
+    Umgeht das nginx-client_max_body_size-Limit, weil jeder Chunk
+    deutlich kleiner als das Limit ist.
+    """
+    if suffix not in (".fdb", ".hsb", ".zip"):
+        raise HTTPException(status_code=400, detail="Ungültige Dateiendung")
+    d = _upload_dir(upload_id)
+    d.mkdir(exist_ok=True)
+    with open(d / f"chunk_{chunk_index:05d}", "wb") as f:
+        shutil.copyfileobj(chunk.file, f)
+    received = len(list(d.glob("chunk_*")))
+    return {"received": received, "total": total_chunks}
+
+
+@app.post("/process_chunked")
+async def process_chunked(data: dict):
+    """Setzt die Chunks zusammen und verarbeitet die Datei.
+
+    Wird nach dem letzten /upload_chunk-Aufruf vom Browser aufgerufen.
+    """
+    upload_id   = data.get("upload_id", "")
+    entity_type = data.get("entity_type", "")
+    filename    = data.get("filename", "upload.fdb")
+
+    if entity_type not in ENTITY_TYPES:
+        raise HTTPException(status_code=400, detail="Ungültiger Entitätstyp")
+
+    d = _upload_dir(upload_id)
+    if not d.exists():
+        raise HTTPException(status_code=400, detail="Upload-Session nicht gefunden")
+
+    suffix = Path(filename).suffix.lower()
+    if suffix not in (".fdb", ".hsb", ".zip"):
+        raise HTTPException(status_code=400, detail="Ungültige Dateiendung")
+
+    # Chunks zusammensetzen
+    assembled_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as out:
+            assembled_path = out.name
+            for chunk_file in sorted(d.glob("chunk_*")):
+                with open(chunk_file, "rb") as cf:
+                    shutil.copyfileobj(cf, out)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)  # Chunks sofort löschen
+
+    try:
+        if suffix in (".fdb", ".hsb"):
+            rows = read_hs3(assembled_path, entity_type)
+        else:
+            rows = read_hs3_csv(assembled_path, entity_type)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Datei konnte nicht gelesen werden: {exc}"
+        ) from exc
+    finally:
+        if assembled_path and os.path.exists(assembled_path):
+            os.unlink(assembled_path)
 
     if not rows:
         raise HTTPException(status_code=400, detail="Keine Datensätze gefunden.")

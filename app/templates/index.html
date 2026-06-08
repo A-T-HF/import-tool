@@ -245,6 +245,41 @@ function handleFile(file) {
   document.getElementById("btnDownloadAll").classList.toggle("d-none", !(isHs3 || isHs3Csv));
 }
 
+// ── Chunked-Upload-Konstanten ─────────────────────────────────────────────
+const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — sicher unter jedem nginx-Limit
+
+function generateUploadId() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+async function uploadInChunks(file, uploadId, onProgress) {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const suffix = "." + file.name.split(".").pop().toLowerCase();
+  let uploadedBytes = 0;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end   = Math.min(start + CHUNK_SIZE, file.size);
+    const blob  = file.slice(start, end);
+
+    const fd = new FormData();
+    fd.append("chunk", blob, "chunk");
+    fd.append("upload_id", uploadId);
+    fd.append("chunk_index", String(i));
+    fd.append("total_chunks", String(totalChunks));
+    fd.append("suffix", suffix);
+
+    await xhrUpload(`${BASE}/upload_chunk`, fd, (loaded) => {
+      onProgress(uploadedBytes + loaded, file.size);
+    });
+    uploadedBytes = end;
+    onProgress(uploadedBytes, file.size);
+  }
+}
+
 // ── Upload-Hilfsfunktion mit Fortschrittsanzeige ──────────────────────────
 function xhrUpload(url, formData, onProgress) {
   return new Promise((resolve, reject) => {
@@ -321,11 +356,41 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
 
   try {
     if (isHs3 || isHs3Csv) {
-      // HS3 import (direkt oder CSV-ZIP) — Spaltenzuordnung überspringen
-      btn.textContent = "HS3 wird übertragen…";
-      const endpoint = isHs3Csv ? `${BASE}/upload_hs3_csv` : `${BASE}/upload_hs3`;
-      const data = await xhrUpload(endpoint, fd, setProgress);
-      if (data.error) throw new Error(data.error);
+      // Chunked Upload — umgeht nginx client_max_body_size-Limit
+      const uploadId = generateUploadId();
+      const nChunks  = Math.ceil(selectedFile.size / CHUNK_SIZE);
+      btn.textContent = nChunks > 1
+        ? `Hochladen… (Teil 1/${nChunks})`
+        : "Hochladen…";
+
+      // Fortschritt + Chunk-Label aktualisieren
+      let lastChunk = 0;
+      function chunkProgress(loaded, total) {
+        const curChunk = Math.floor(loaded / CHUNK_SIZE) + 1;
+        if (curChunk !== lastChunk && nChunks > 1) {
+          btn.textContent = `Hochladen… (Teil ${Math.min(curChunk, nChunks)}/${nChunks})`;
+          lastChunk = curChunk;
+        }
+        setProgress(loaded, total);
+      }
+
+      await uploadInChunks(selectedFile, uploadId, chunkProgress);
+
+      // Alle Chunks übertragen — jetzt assemblieren & verarbeiten
+      setProgress(selectedFile.size, selectedFile.size);
+      btn.textContent = "Wird verarbeitet…";
+
+      const res = await fetch(`${BASE}/process_chunked`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          upload_id:   uploadId,
+          entity_type: S.entityType,
+          filename:    selectedFile.name,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || `Server-Fehler ${res.status}`);
 
       S.source = "hs3";
       S.allRows = data.rows;
