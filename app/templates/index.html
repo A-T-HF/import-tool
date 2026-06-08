@@ -74,6 +74,12 @@
         </div>
       </div>
       <div id="uploadError" class="alert alert-danger d-none"></div>
+      <div id="uploadProgressWrap" class="d-none" style="margin-bottom:12px">
+        <div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px">
+          <div id="uploadProgressBar" style="background:var(--primary);height:100%;width:0%;transition:width .3s ease"></div>
+        </div>
+        <p id="uploadProgressText" class="small text-muted"></p>
+      </div>
       <div class="btn-row">
         <button id="btnUpload" class="btn btn-primary" disabled>Weiter →</button>
         <button id="btnDownloadAll" class="btn btn-success d-none" type="button">Alle Typen exportieren ↓</button>
@@ -202,6 +208,7 @@ const S = {
 
 // ── Screen navigation ──────────────────────────────────────────────
 function showScreen(n) {
+  if (n !== 1 && typeof resetProgress === "function") resetProgress();
   document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
   const id = n === "3a" ? "screen3a" : n === "3b" ? "screen3b" : n === "4" ? "screen4" : `screen${n}`;
   document.getElementById(id).classList.add("active");
@@ -238,11 +245,66 @@ function handleFile(file) {
   document.getElementById("btnDownloadAll").classList.toggle("d-none", !(isHs3 || isHs3Csv));
 }
 
+// ── Upload-Hilfsfunktion mit Fortschrittsanzeige ──────────────────────────
+function xhrUpload(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { resolve({}); }
+      } else if (xhr.status === 413) {
+        reject(new Error(
+          "Datei zu groß (413) — das nginx-Upload-Limit der Plattform ist überschritten. " +
+          "Bitte den Plattform-Admin bitten, client_max_body_size für diese App zu erhöhen."
+        ));
+      } else {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          reject(new Error(body.detail || body.error || `Server-Fehler ${xhr.status}`));
+        } catch {
+          reject(new Error(`Server-Fehler ${xhr.status}`));
+        }
+      }
+    });
+    xhr.addEventListener("error", () => reject(new Error("Netzwerkfehler")));
+    xhr.send(formData);
+  });
+}
+
+function setProgress(loaded, total) {
+  const pct = total ? Math.round(loaded / total * 100) : 0;
+  const bar  = document.getElementById("uploadProgressBar");
+  const text = document.getElementById("uploadProgressText");
+  const wrap = document.getElementById("uploadProgressWrap");
+  wrap.classList.remove("d-none");
+  bar.style.width  = pct + "%";
+  if (pct >= 100) {
+    bar.style.background = "var(--success)";
+    text.textContent = "Datei übertragen — Server verarbeitet…";
+  } else {
+    bar.style.background = "var(--primary)";
+    text.textContent = `Hochladen… ${pct} %  (${(loaded/1048576).toFixed(1)} / ${(total/1048576).toFixed(1)} MB)`;
+  }
+}
+
+function resetProgress() {
+  const wrap = document.getElementById("uploadProgressWrap");
+  const bar  = document.getElementById("uploadProgressBar");
+  wrap.classList.add("d-none");
+  bar.style.width = "0%";
+}
+
 document.getElementById("btnUpload").addEventListener("click", async () => {
   const btn = document.getElementById("btnUpload");
   btn.disabled = true; btn.textContent = "Wird geladen…";
   const errEl = document.getElementById("uploadError");
   errEl.classList.add("d-none");
+  resetProgress();
 
   const fd = new FormData();
   fd.append("file", selectedFile);
@@ -256,11 +318,10 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
   try {
     if (isHs3 || isHs3Csv) {
       // HS3 import (direkt oder CSV-ZIP) — Spaltenzuordnung überspringen
-      btn.textContent = "HS3 wird eingelesen…";
+      btn.textContent = "HS3 wird übertragen…";
       const endpoint = isHs3Csv ? `${BASE}/upload_hs3_csv` : `${BASE}/upload_hs3`;
-      const res = await fetch(endpoint, { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
-      if (!res.ok) throw new Error(data.error || "Fehler beim HS3-Import");
+      const data = await xhrUpload(endpoint, fd, setProgress);
+      if (data.error) throw new Error(data.error);
 
       S.source = "hs3";
       S.allRows = data.rows;
@@ -279,9 +340,9 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
         showScreen("3a");
       }
     } else {
-      const res = await fetch(`${BASE}/upload`, { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({ error: `Server-Fehler ${res.status}` }));
-      if (!res.ok) throw new Error(data.error || "Fehler beim Upload");
+      btn.textContent = "Datei wird übertragen…";
+      const data = await xhrUpload(`${BASE}/upload`, fd, setProgress);
+      if (data.error) throw new Error(data.error);
 
       if (data.source === "mews" || data.source === "bookinglist") {
         // Pre-mapped import (Mews / BookingList) — skip column mapping
@@ -321,6 +382,7 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove("d-none");
+    resetProgress();
   } finally {
     btn.disabled = false; btn.textContent = "Weiter →";
   }
