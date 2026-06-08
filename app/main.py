@@ -11,11 +11,14 @@ funktioniert sauber.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
+import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -246,6 +249,58 @@ def _upload_dir(upload_id: str) -> Path:
     return Path(tempfile.gettempdir()) / f"hs3_upload_{upload_id}"
 
 
+async def _run_hs3_subprocess(assembled_path: str, entity_type: str) -> list[dict]:
+    """HS3-Datei in einem Subprozess lesen — schützt uvicorn vor OOM-Kill.
+
+    Wenn der Subprozess durch den Kernel gekillt wird (SIGKILL, return code -9),
+    bleibt der uvicorn-Hauptprozess am Leben und liefert eine lesbare Fehlermeldung.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as fh:
+        out_json = fh.name
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "app.hs3_worker",
+            assembled_path, entity_type, out_json,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=300)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            raise HTTPException(
+                status_code=408,
+                detail="Zeitüberschreitung beim Lesen der Datei (max. 5 Minuten).",
+            )
+
+        if proc.returncode != 0:
+            stderr_msg = (
+                (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+                or "Unbekannter Fehler"
+            )
+            if proc.returncode == -9:  # SIGKILL — OOM-Kill durch den Kernel
+                raise HTTPException(
+                    status_code=507,
+                    detail=(
+                        "Datei zu groß — Arbeitsspeicher reicht nicht aus. "
+                        "Bitte den Administrator bitten, das Speicherlimit des "
+                        "Import-Tools zu erhöhen (aktuell 512 MB)."
+                    ),
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Datei konnte nicht gelesen werden: {stderr_msg}",
+            )
+
+        with open(out_json, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    finally:
+        if os.path.exists(out_json):
+            os.unlink(out_json)
+
+
 @app.post("/upload_chunk")
 async def upload_chunk(
     chunk: UploadFile = File(...),
@@ -303,15 +358,17 @@ async def process_chunked(data: dict):
 
     try:
         if suffix in (".fdb", ".hsb"):
-            rows = read_hs3(assembled_path, entity_type)
+            # Subprozess: schützt uvicorn vor OOM-Kill bei großen Firebird-Dateien
+            rows = await _run_hs3_subprocess(assembled_path, entity_type)
         else:
-            rows = read_hs3_csv(assembled_path, entity_type)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Datei konnte nicht gelesen werden: {exc}"
-        ) from exc
+            try:
+                rows = read_hs3_csv(assembled_path, entity_type)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"ZIP konnte nicht gelesen werden: {exc}"
+                ) from exc
     finally:
         if assembled_path and os.path.exists(assembled_path):
             os.unlink(assembled_path)
