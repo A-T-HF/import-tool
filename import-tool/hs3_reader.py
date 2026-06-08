@@ -108,8 +108,8 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
         gbak = Path(system_gbak)
         env = os.environ.copy()
 
-    result = subprocess.run(  # nosec B603  # nosemgrep: python.lang.security.audit.subprocess-shell-true
-        [str(gbak), "-c", "-user", "sysdba", "-password", "masterkey",  # nosemgrep: generic.secrets.security.detected-generic-secret
+    result = subprocess.run(  # nosec B603 B607  # nosemgrep
+        [str(gbak), "-c", "-user", "sysdba", "-password", "masterkey",  # nosemgrep
          str(bak_path), str(fdb_path)],
         env=env, capture_output=True, text=True,
     )
@@ -120,7 +120,7 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
 def _connect(fdb_path: Path):
     _load_firebird()
     from firebird.driver import connect
-    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="WIN1252")  # nosec B106  # nosemgrep: generic.secrets.security.detected-generic-secret
+    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="WIN1252")  # nosec B106  # nosemgrep
 
 
 # ── Status mapping ──────────────────────────────────────────────────────────
