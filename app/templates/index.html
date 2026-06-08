@@ -246,7 +246,7 @@ function handleFile(file) {
 }
 
 // ── Chunked-Upload-Konstanten ─────────────────────────────────────────────
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — sicher unter jedem nginx-Limit
+const CHUNK_SIZE = 45 * 1024 * 1024; // 45 MB — nginx client_max_body_size=50m, Overhead ~1 MB
 
 function generateUploadId() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
