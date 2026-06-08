@@ -66,12 +66,12 @@ def healthz() -> dict[str, str]:
 
 @app.get("/")
 def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/preview")
 def preview(request: Request):
-    return templates.TemplateResponse("preview.html", {"request": request})
+    return templates.TemplateResponse(request, "preview.html")
 
 
 @app.post("/upload")
