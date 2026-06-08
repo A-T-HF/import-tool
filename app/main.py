@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import shutil
 import tempfile
 import zipfile
 from pathlib import Path
@@ -176,10 +177,10 @@ async def upload_hs3(
 
     filename = file.filename or ""
     suffix = ".hsb" if filename.lower().endswith(".hsb") else ".fdb"
-    raw = await file.read()
 
+    # Stream direkt auf Disk — kein raw=file.read(), damit kein RAM-Spike bei großen .fdb
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(raw)
+        shutil.copyfileobj(file.file, tmp)
         tmp_name = tmp.name
 
     try:
@@ -210,10 +211,9 @@ async def upload_hs3_csv(
     if entity_type not in ENTITY_TYPES:
         raise HTTPException(status_code=400, detail="Ungültige Anfrage")
 
-    raw = await file.read()
-
+    # Stream direkt auf Disk — kein raw=file.read()
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp.write(raw)
+        shutil.copyfileobj(file.file, tmp)
         tmp_name = tmp.name
 
     try:
@@ -306,10 +306,10 @@ async def download_all(file: UploadFile = File(...)):
     """Upload a single HS3 or Mews file → ZIP with valid CSVs for all three entity types."""
     filename = file.filename or ""
     suffix   = Path(filename).suffix.lower()
-    raw      = await file.read()
 
+    # Stream direkt auf Disk — kein raw=file.read() für große Dateien
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(raw)
+        shutil.copyfileobj(file.file, tmp)
         tmp_name = tmp.name
 
     try:
@@ -318,13 +318,15 @@ async def download_all(file: UploadFile = File(...)):
                 return read_hs3(tmp_name, et)
 
         elif suffix == ".xlsx":
-            if not is_mews_xlsx(io.BytesIO(raw)):
-                raise HTTPException(
-                    status_code=400,
-                    detail="XLSX ist kein Mews Reservierungsbericht",
-                )
+            with open(tmp_name, "rb") as f:
+                if not is_mews_xlsx(f):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="XLSX ist kein Mews Reservierungsbericht",
+                    )
             def reader(et: str) -> list[dict]:
-                return read_mews(io.BytesIO(raw), et)
+                with open(tmp_name, "rb") as f:
+                    return read_mews(f, et)
 
         else:
             raise HTTPException(

@@ -271,7 +271,11 @@ function xhrUpload(url, formData, onProgress) {
         }
       }
     });
-    xhr.addEventListener("error", () => reject(new Error("Netzwerkfehler")));
+    xhr.addEventListener("error", () => reject(new Error(
+      "Netzwerkfehler — Verbindung unterbrochen. " +
+      "Bei großen Dateien (>300 MB) kann das nginx-Upload-Limit der Plattform überschritten sein."
+    )));
+    xhr.addEventListener("abort", () => reject(new Error("Upload abgebrochen.")));
     xhr.send(formData);
   });
 }
