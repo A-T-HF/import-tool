@@ -4,6 +4,7 @@ from transformer import (
     transform_title, transform_reservation_status
 )
 from transformer import transform, TransformResult
+from transformer import generate_fallback_email
 
 def test_guest_required_fields():
     fields = get_fields("guest")
@@ -243,6 +244,83 @@ def test_transform_ignored_columns_excluded():
     assert "_ignore" not in result.valid_rows[0]
 
 from transformer import suggest_mapping
+
+# --- generate_fallback_email ---
+
+def test_fallback_email_normal_name():
+    assert generate_fallback_email("Felix", "Marggraf", 1) == "felix.marggraf@import-hotelfriend.de"
+
+def test_fallback_email_umlaut():
+    assert generate_fallback_email("Jörg", "Müller", 1) == "joerg.mueller@import-hotelfriend.de"
+
+def test_fallback_email_parenthetical_stripped():
+    assert generate_fallback_email("Felix", "Marggraf (XL)", 1) == "felix.marggraf@import-hotelfriend.de"
+
+def test_fallback_email_no_first_name():
+    assert generate_fallback_email("", "Müller", 5) == "gast.mueller.5@import-hotelfriend.de"
+
+def test_fallback_email_placeholder_first_name():
+    assert generate_fallback_email("-", "Müller", 3) == "gast.mueller.3@import-hotelfriend.de"
+
+def test_fallback_email_nn_placeholder():
+    assert generate_fallback_email("N. n.", "N. n.", 7) == "gast.7@import-hotelfriend.de"
+
+def test_fallback_email_no_name():
+    # "no" / "name" als separate Felder → werden als echte Namen behandelt
+    assert generate_fallback_email("no", "name", 9) == "no.name@import-hotelfriend.de"
+
+def test_fallback_email_no_last_name():
+    assert generate_fallback_email("Felix", "", 2) == "felix.gast.2@import-hotelfriend.de"
+
+def test_fallback_email_in_reservation_transform():
+    """Reservierungen ohne E-Mail bekommen automatisch eine Fallback-Adresse."""
+    rows = [{
+        "Vorname": "Felix", "Nachname": "Marggraf",
+        "Check In": "2025-01-01", "Check Out": "2025-01-05",
+        "Zimmertyp": "Doppelzimmer",
+    }]
+    mapping = {
+        "Vorname": "first_name", "Nachname": "last_name",
+        "Check In": "Check In", "Check Out": "Check Out",
+        "Zimmertyp": "Zimmertyp",
+    }
+    result = transform(rows, "reservation", mapping)
+    assert len(result.valid_rows) == 1
+    assert result.valid_rows[0]["email"] == "felix.marggraf@import-hotelfriend.de"
+    assert result.valid_rows[0]["_system_changes"].get("email") == ""
+
+def test_fallback_email_not_overwritten_when_present():
+    """Vorhandene E-Mail darf nicht überschrieben werden."""
+    rows = [{
+        "Vorname": "Felix", "Nachname": "Marggraf", "E-Mail": "felix@example.com",
+        "Check In": "2025-01-01", "Check Out": "2025-01-05",
+        "Zimmertyp": "Doppelzimmer",
+    }]
+    mapping = {
+        "Vorname": "first_name", "Nachname": "last_name", "E-Mail": "email",
+        "Check In": "Check In", "Check Out": "Check Out",
+        "Zimmertyp": "Zimmertyp",
+    }
+    result = transform(rows, "reservation", mapping)
+    assert result.valid_rows[0]["email"] == "felix@example.com"
+
+def test_fallback_email_no_name_uses_index():
+    """Einträge ohne Namen bekommen gast.{index}@import-hotelfriend.de."""
+    rows = [
+        {"Vorname": "N. n.", "Nachname": "N. n.",
+         "Check In": "2025-01-01", "Check Out": "2025-01-05", "Zimmertyp": "EZ"},
+        {"Vorname": "N. n.", "Nachname": "N. n.",
+         "Check In": "2025-02-01", "Check Out": "2025-02-05", "Zimmertyp": "EZ"},
+    ]
+    mapping = {
+        "Vorname": "first_name", "Nachname": "last_name",
+        "Check In": "Check In", "Check Out": "Check Out", "Zimmertyp": "Zimmertyp",
+    }
+    result = transform(rows, "reservation", mapping)
+    emails = [r["email"] for r in result.valid_rows]
+    assert emails[0] == "gast.1@import-hotelfriend.de"
+    assert emails[1] == "gast.2@import-hotelfriend.de"
+    assert emails[0] != emails[1]  # eindeutig durch Index
 
 def test_suggest_mapping_german_first_name():
     suggestions = suggest_mapping(["Vorname", "Nachname", "E-Mail"], "guest")

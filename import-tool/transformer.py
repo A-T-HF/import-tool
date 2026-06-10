@@ -81,6 +81,48 @@ def get_fields(entity_type: str) -> list[dict]:
 from datetime import datetime
 import re
 
+# --- Fallback-E-Mail-Generierung ---
+
+_UMLAUT_TABLE = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+_PAREN_RE = re.compile(r"\s*\([^)]*\)")
+_NO_NAME_RE = re.compile(r"^[-.]*(n\.?\s*n\.?|no\s*name|kein\s*name|gast|-+)[-.\s]*$", re.I)
+
+
+def _normalize_name_part(s: str) -> str:
+    """Klammerzusätze entfernen, Umlaute ersetzen, auf a-z0-9 reduzieren."""
+    s = _PAREN_RE.sub("", s).strip()
+    s = s.lower().translate(_UMLAUT_TABLE)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _is_no_name(s: str) -> bool:
+    """True wenn der Namenswert ein Platzhalter ('n.n.', 'no name', '-', …) ist."""
+    cleaned = _PAREN_RE.sub("", (s or "")).strip()
+    return not cleaned or bool(_NO_NAME_RE.match(cleaned))
+
+
+def generate_fallback_email(first_name: str, last_name: str, row_index: int) -> str:
+    """
+    Generiert eine Fallback-E-Mail wenn keine vorhanden ist.
+
+    Normaler Name:  felix.marggraf@import-hotelfriend.de
+    Nur Nachname:   gast.mueller.5@import-hotelfriend.de
+    Kein Name:      gast.5@import-hotelfriend.de
+    """
+    v = _normalize_name_part(first_name or "")
+    n = _normalize_name_part(last_name or "")
+    v_empty = _is_no_name(first_name or "")
+    n_empty = _is_no_name(last_name or "")
+
+    if v_empty and n_empty:
+        return f"gast.{row_index}@import-hotelfriend.de"
+    if v_empty or not v:
+        return f"gast.{n}.{row_index}@import-hotelfriend.de"
+    if n_empty or not n:
+        return f"{v}.gast.{row_index}@import-hotelfriend.de"
+    return f"{v}.{n}@import-hotelfriend.de"
+
+
 # --- Datum ---
 _DATE_FORMATS_EU = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",  # Mews: "29.01.2026 15:00"
@@ -338,6 +380,14 @@ def transform(rows: list[dict], entity_type: str, mapping: dict[str, str]) -> Tr
                 if not mapped.get(fname):
                     auto_filled[fname] = ""          # original was empty
                     mapped[fname] = "-"
+
+        # Generate fallback email when none is provided (guests + reservations)
+        if entity_type in ("guest", "reservation"):
+            if not mapped.get("email"):
+                fn = mapped.get("first_name", "") or ""
+                ln = mapped.get("last_name", "") or ""
+                mapped["email"] = generate_fallback_email(fn, ln, row_index + 1)
+                auto_filled["email"] = ""            # original was empty
 
         if auto_filled:
             mapped["_system_changes"] = auto_filled
