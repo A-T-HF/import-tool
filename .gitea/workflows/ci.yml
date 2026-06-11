@@ -1,4 +1,4 @@
-# template-version: 2
+# template-version: 3
 name: CI
 
 # Standard-CI für App-Repos der Plattform. Wird beim Projekt-Anlegen von
@@ -19,6 +19,18 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
+# Alle pip-Installationen laufen ueber den plattform-internen PyPI-Proxy
+# (proxpi, Service pypi-proxy auf Host-Port 5000). Damit haengt die CI nicht
+# mehr am flakigen Internet-Egress: erstmalig gezogene Wheels cached der
+# Proxy, jeder Folge-Lauf ist LAN-Tempo. PIP_TRUSTED_HOST erlaubt das
+# Plain-HTTP-LAN-Ziel; Timeout/Retries fangen den kalten Erstabruf ab.
+# Siehe runbooks/pypi-proxy.md.
+env:
+  PIP_INDEX_URL: "http://192.168.178.201:5000/index/"
+  PIP_TRUSTED_HOST: "192.168.178.201"
+  PIP_RETRIES: "10"
+  PIP_DEFAULT_TIMEOUT: "60"
 
 jobs:
 
@@ -159,6 +171,12 @@ jobs:
         with:
           context: .
           push: true
+          # Der Image-Build zieht seine Python-Deps ueber denselben LAN-Proxy
+          # wie die Host-Tests. Das App-Dockerfile (Skeleton) wertet diese
+          # Build-Args aus; fehlen sie, faellt pip auf pypi.org zurueck.
+          build-args: |
+            PIP_INDEX_URL=http://192.168.178.201:5000/index/
+            PIP_TRUSTED_HOST=192.168.178.201
           # Zwei Tags: voller SHA für eindeutige Deploys, :latest für Bequemlichkeit.
           # Die Plattform deployed nur gegen den SHA-Tag, :latest ist ein Hint.
           tags: |
