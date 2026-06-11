@@ -139,6 +139,44 @@ _DATE_FORMATS_US = [
 
 _SLASH_DATE = re.compile(r'^(\d{1,2})/(\d{1,2})/\d{2,4}$')
 
+# "02 Feb. 2026" / "23 März 2026" / "01 Mai 2026"
+_NAMED_MONTH_RE = re.compile(r'^(\d{1,2})\s+([A-Za-zÀ-ɏ]+\.?)\s+(\d{4})$')
+_MONTH_MAP = {
+    "jan": "01", "feb": "02",
+    "mar": "03", "mär": "03",   # EN + DE
+    "apr": "04",
+    "may": "05", "mai": "05",   # EN + DE
+    "jun": "06",
+    "jul": "07",
+    "aug": "08",
+    "sep": "09",
+    "oct": "10", "okt": "10",   # EN + DE
+    "nov": "11",
+    "dec": "12", "dez": "12",   # EN + DE
+}
+
+
+def _normalize_named_month(v: str) -> str | None:
+    """
+    Normalise date strings with written month names to DD.MM.YYYY.
+
+    Handles:
+      "02 Feb. 2026"  → "02.02.2026"
+      "23 März 2026"  → "23.03.2026"
+      "01 Mai 2026"   → "01.05.2026"
+      "14 Jun 2026"   → "14.06.2026"
+    """
+    m = _NAMED_MONTH_RE.match(v.strip())
+    if not m:
+        return None
+    day, month_raw, year = m.group(1), m.group(2), m.group(3)
+    key = month_raw.rstrip(".").lower()[:3]
+    month_num = _MONTH_MAP.get(key)
+    if not month_num:
+        return None
+    return f"{int(day):02d}.{month_num}.{year}"
+
+
 def detect_american_dates(rows: list[dict], mapping: dict[str, str]) -> bool:
     """
     Scan up to 20 rows of date columns to detect MM/DD/YYYY (American) format.
@@ -164,6 +202,10 @@ def transform_date(value: str, prefer_american: bool = False) -> str | None:
     if not value or not value.strip():
         return None
     v = value.strip()
+    # Normalise "02 Feb. 2026" / "23 März 2026" → "02.02.2026" before format loop
+    normalised = _normalize_named_month(v)
+    if normalised:
+        v = normalised
     formats = _DATE_FORMATS_US if prefer_american else _DATE_FORMATS_EU
     for fmt in formats:
         try:

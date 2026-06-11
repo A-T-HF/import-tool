@@ -41,6 +41,34 @@ def test_date_invalid():
 def test_date_empty():
     assert transform_date("") is None
 
+# --- Named-Month-Datumsformat (z.B. Direktbuchung-Export) ---
+def test_date_named_month_abbreviated_en():
+    assert transform_date("02 Feb. 2026") == "2026-02-02"
+
+def test_date_named_month_abbreviated_en_no_dot():
+    assert transform_date("14 Jun 2026") == "2026-06-14"
+
+def test_date_named_month_german_maerz():
+    assert transform_date("23 März 2026") == "2026-03-23"
+
+def test_date_named_month_german_mai():
+    assert transform_date("01 Mai 2026") == "2026-05-01"
+
+def test_date_named_month_german_juni():
+    assert transform_date("22 Juni 2026") == "2026-06-22"
+
+def test_date_named_month_german_juli():
+    assert transform_date("02 Juli 2026") == "2026-07-02"
+
+def test_date_named_month_german_aug():
+    assert transform_date("08 Aug. 2026") == "2026-08-08"
+
+def test_date_named_month_german_dez():
+    assert transform_date("18 Dez. 2026") == "2026-12-18"
+
+def test_date_named_month_day_padding():
+    assert transform_date("5 Apr. 2026") == "2026-04-05"
+
 # --- Ländercode ---
 def test_country_german_name():
     assert transform_country("Deutschland") == "DE"
