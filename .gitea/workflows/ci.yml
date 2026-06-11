@@ -1,4 +1,4 @@
-# template-version: 3
+# template-version: 4
 name: CI
 
 # Standard-CI für App-Repos der Plattform. Wird beim Projekt-Anlegen von
@@ -171,6 +171,13 @@ jobs:
         with:
           context: .
           push: true
+          # Build-RUN-Schritte ins Host-Netz heben (= docker build --network
+          # host). Pflicht, damit der Build den PyPI-Proxy auf 192.168.178.201:5000
+          # ueberhaupt erreicht: die RUN-Schritte laufen sonst im Bridge-
+          # Namespace, und genau der Bridge->Host-LAN-Pfad stallt (dieselbe
+          # MTU/MSS-Falle wie beim direkten pypi-Egress). Der host-net-pytest-Job
+          # kommt durch, der Build ohne diesen Schalter nicht.
+          network: host
           # Der Image-Build zieht seine Python-Deps ueber denselben LAN-Proxy
           # wie die Host-Tests. Das App-Dockerfile (Skeleton) wertet diese
           # Build-Args aus; fehlen sie, faellt pip auf pypi.org zurueck.
