@@ -4,7 +4,10 @@ __pycache__/
 *.egg-info/
 .env
 venv/
+venv_x86/
 # Firebird 5 arm64 embedded — zu groß für Git (52 MB), lokal einrichten
 firebird/
-
 .worktrees/
+guests.sqlite
+testdata/
+start_local.sh
