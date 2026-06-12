@@ -28,8 +28,23 @@ def pad_to_schema(rows: list[dict], entity_type: str) -> list[dict]:
     fields = [f["name"] for f in get_fields(entity_type)]
     return [{field: row.get(field, "") for field in fields} for row in rows]
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates", static_folder="app/static")
 app.config["MAX_CONTENT_LENGTH"] = 700 * 1024 * 1024  # 700 MB (.fdb-Direktdateien bis ~600 MB)
+
+# FastAPI-Templates nutzen request.url_for('static', path='...')
+# Dieser Adapter macht das in Flask kompatibel.
+class _FakeRequest:
+    def url_for(self, name, **kwargs):
+        if name == "static":
+            return "/static/" + kwargs.get("path", kwargs.get("filename", ""))
+        return "/" + name
+
+    def url_path_for(self, name, **kwargs):
+        return self.url_for(name, **kwargs)
+
+@app.context_processor
+def _inject_request():
+    return {"request": _FakeRequest()}
 
 @app.get("/healthz")
 def healthz():

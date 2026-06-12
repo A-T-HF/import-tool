@@ -117,10 +117,33 @@ def _restore_bak(bak_path: Path, fdb_path: Path):
         raise RuntimeError(f"gbak Fehler: {result.stderr or result.stdout}")
 
 
+def _decode(v):
+    """Decode a bytes value from a NONE-charset Firebird connection to str (cp1252 → UTF-8 str)."""
+    if isinstance(v, (bytes, bytearray)):
+        return v.decode("cp1252", errors="replace").rstrip("\x00")
+    return v
+
+
+def _decode_row(row: dict) -> dict:
+    """Apply _decode to all values in a row dict."""
+    return {k: _decode(v) for k, v in row.items()}
+
+
+def _fetchall_as_dicts(cur) -> list[dict]:
+    """Fetch all rows as decoded dicts (handles charset=NONE bytes → str via cp1252)."""
+    cols = [d[0] for d in cur.description]
+    return [_decode_row(dict(zip(cols, row))) for row in cur.fetchall()]
+
+
 def _connect(fdb_path: Path):
     _load_firebird()
+    import firebird.driver.core as _fb_core
     from firebird.driver import connect
-    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="WIN1252")  # nosec B106  # nosemgrep
+    # firebird-driver maps charset="NONE" to locale.getpreferredencoding() which is UTF-8 on macOS.
+    # HS3 databases are created on Windows with WIN1252 (cp1252), so we patch the map to use cp1252.
+    # This ensures bytes values from Firebird are decoded with the correct Windows codepage.
+    _fb_core.CHARSET_MAP['NONE'] = 'cp1252'
+    return connect(str(fdb_path), user="sysdba", password="masterkey", charset="NONE")  # nosec B106  # nosemgrep
 
 
 # ── Status mapping ──────────────────────────────────────────────────────────
@@ -200,7 +223,7 @@ def _build_language_map(con) -> dict[int, str]:
     """Build {hs3_language_id: iso639_code} from SYS_LANGUAGES."""
     cur = con.cursor()
     cur.execute("SELECT ID, ISO639 FROM SYS_LANGUAGES WHERE ISO639 IS NOT NULL AND ISO639 <> ''")
-    return {r[0]: r[1].strip().lower() for r in cur.fetchall()}
+    return {r[0]: _decode(r[1]).strip().lower() for r in cur.fetchall()}
 
 
 def read_guests(con) -> list[dict]:
@@ -225,10 +248,8 @@ def read_guests(con) -> list[dict]:
           AND CUSTTYPE = 1
           AND COALESCE(ARCHIVE, 0) = 0
     """)
-    cols = [d[0] for d in cur.description]
     base: dict[int, dict] = {}
-    for raw in cur.fetchall():
-        r = dict(zip(cols, raw))
+    for r in _fetchall_as_dicts(cur):
         last = (r.get("NAME1") or "").strip()
         if not last or is_company_name(last):
             continue
@@ -244,10 +265,10 @@ def read_guests(con) -> list[dict]:
     for custid, name1, name2 in cur.fetchall():
         if custid not in base:
             continue
-        last = (name1 or "").strip()
+        last = (_decode(name1) or "").strip()
         if last and not is_company_name(last):
             base[custid]["candidates"].append(
-                {"first_name": (name2 or "").strip(), "last_name": last}
+                {"first_name": (_decode(name2) or "").strip(), "last_name": last}
             )
 
     # ── 3. Registration-form guests from MOV_RESERVATIONS_GUESTS ──────────
@@ -257,10 +278,10 @@ def read_guests(con) -> list[dict]:
     for custid, lastname, firstname in cur.fetchall():
         if custid not in base:
             continue
-        last = (lastname or "").strip()
+        last = (_decode(lastname) or "").strip()
         if last and not is_company_name(last):
             base[custid]["candidates"].append(
-                {"first_name": (firstname or "").strip(), "last_name": last}
+                {"first_name": (_decode(firstname) or "").strip(), "last_name": last}
             )
 
     # ── 4. Resolve + build HotelFriend rows ───────────────────────────────
@@ -326,10 +347,8 @@ def read_companies(con) -> list[dict]:
           AND CUSTTYPE = 2
           AND COALESCE(ARCHIVE, 0) = 0
     """)
-    cols = [d[0] for d in cur.description]
     rows = []
-    for raw in cur.fetchall():
-        r = dict(zip(cols, raw))
+    for r in _fetchall_as_dicts(cur):
         raw_name    = (r.get("NAME1") or "").strip()
         name        = raw_name or "-"
         raw_country = (r.get("COUNTRY") or "").strip()
@@ -360,7 +379,7 @@ def _build_roomtype_map(con) -> dict[int, str]:
     """Build {productid: room_type_name} from BAS_PRODUCTS_DESCRIPTIONS."""
     cur = con.cursor()
     cur.execute("SELECT PRODUCTID, DESCRIPTION_L01 FROM BAS_PRODUCTS_DESCRIPTIONS WHERE DESCRIPTION_L01 IS NOT NULL")
-    return {r[0]: r[1].strip() for r in cur.fetchall()}
+    return {r[0]: _decode(r[1]).strip() for r in cur.fetchall()}
 
 
 def read_reservations(con) -> list[dict]:
@@ -385,10 +404,8 @@ def read_reservations(con) -> list[dict]:
         WHERE r.ID > 0 AND occ.ID > 0
         ORDER BY r.ID, occ.ID
     """)
-    cols = [d[0] for d in cur.description]
     rows = []
-    for raw in cur.fetchall():
-        r = dict(zip(cols, raw))
+    for r in _fetchall_as_dicts(cur):
         status_code = _STATUS_MAP.get(r.get("RESSTATUS"))
         if status_code is None:
             continue  # skip blocked/setup slots
