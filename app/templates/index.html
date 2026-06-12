@@ -1002,28 +1002,30 @@ function parseHFRoomList(text) {
 
 function _autoMatch(source, options) {
   if (!options.length) return "";
-  const s = source.trim().toLowerCase();
-  // 1. Exact match
-  const exact = options.find(o => o.toLowerCase() === s);
+  // Normalize: lowercase + hyphens → spaces so "EZ-01" matches "EZ 01"
+  const _n = v => v.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  const s = _n(source);
+  // 1. Exact match (normalized)
+  const exact = options.find(o => _n(o) === s);
   if (exact) return exact;
-  // 2. Option starts with source (e.g. "Einzelzimmer" → "Einzelzimmer (Single)")
-  const fwd = options.find(o => o.toLowerCase().startsWith(s));
+  // 2. Option starts with source
+  const fwd = options.find(o => _n(o).startsWith(s));
   if (fwd) return fwd;
   // 3. Source starts with option
-  const rev = options.find(o => s.startsWith(o.toLowerCase()));
+  const rev = options.find(o => s.startsWith(_n(o)));
   if (rev) return rev;
-  // 4. Shared leading words (e.g. "Doppelzimmer Balkon" vs "Doppelzimmer mit Balkon (Double)")
-  const srcWords = s.split(/\s+/).filter(w => w.length > 3);
+  // 4. Shared words (e.g. "Doppelzimmer Balkon" vs "Doppelzimmer mit Balkon (Double)")
+  const srcWords = s.split(/\s+/).filter(w => w.length > 2);
   if (srcWords.length) {
     const wordMatch = options.find(o => {
-      const oLower = o.toLowerCase();
-      return srcWords.every(w => oLower.includes(w));
+      const oN = _n(o);
+      return srcWords.every(w => oN.includes(w));
     });
     if (wordMatch) return wordMatch;
     // At least half the words match
     const partial = options.find(o => {
-      const oLower = o.toLowerCase();
-      const hits = srcWords.filter(w => oLower.includes(w));
+      const oN = _n(o);
+      const hits = srcWords.filter(w => oN.includes(w));
       return hits.length >= Math.ceil(srcWords.length / 2);
     });
     if (partial) return partial;
