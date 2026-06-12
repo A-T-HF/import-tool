@@ -8,7 +8,7 @@ ENTITY_TYPES = ["guest", "company", "reservation"]
 _GUEST_FIELDS = [
     {"name": "first_name",            "required": True,  "transformer": None,      "validator": None},
     {"name": "last_name",             "required": True,  "transformer": None,      "validator": None},
-    {"name": "email",                 "required": False, "transformer": None,      "validator": "email"},
+    {"name": "email",                 "required": False, "transformer": "email",   "validator": "email"},
     {"name": "phone",                 "required": False, "transformer": None,      "validator": None},
     {"name": "country",               "required": False, "transformer": "country", "validator": None},
     {"name": "region",                "required": False, "transformer": None,      "validator": None},
@@ -39,7 +39,7 @@ _COMPANY_FIELDS = [
     {"name": "code",             "required": False, "transformer": None,      "validator": "company_code"},
     {"name": "phone",            "required": False, "transformer": None,      "validator": None},
     {"name": "phone2",           "required": False, "transformer": None,      "validator": None},
-    {"name": "email",            "required": False, "transformer": None,      "validator": "email"},
+    {"name": "email",            "required": False, "transformer": "email",   "validator": "email"},
     {"name": "country",          "required": False, "transformer": "country", "validator": None},
     {"name": "city",             "required": False, "transformer": None,      "validator": None},
     {"name": "address",          "required": False, "transformer": None,      "validator": None},
@@ -59,7 +59,7 @@ _COMPANY_FIELDS = [
 _RESERVATION_FIELDS = [
     {"name": "first_name",       "required": True,  "transformer": None,                 "validator": None},
     {"name": "last_name",        "required": True,  "transformer": None,                 "validator": None},
-    {"name": "email",            "required": False, "transformer": None,                 "validator": "email"},
+    {"name": "email",            "required": False, "transformer": "email",              "validator": "email"},
     {"name": "Check In",         "required": True,  "transformer": "date",               "validator": None},
     {"name": "Check Out",        "required": True,  "transformer": "date",               "validator": None},
     {"name": "Zimmer",           "required": False, "transformer": None,                 "validator": None},
@@ -84,18 +84,57 @@ import re
 # --- Datum ---
 _DATE_FORMATS_EU = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",  # Mews: "29.01.2026 15:00"
+    "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",  # pandas: "2026-07-02 00:00:00"
     "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",      # EU slash before US slash
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%d.%m.%y", "%m/%d/%y",
 ]
 _DATE_FORMATS_US = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",
+    "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",  # pandas: "2026-07-02 00:00:00"
     "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y",      # US slash before EU slash
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%m/%d/%y", "%d.%m.%y",
 ]
 
 _SLASH_DATE = re.compile(r'^(\d{1,2})/(\d{1,2})/\d{2,4}$')
+
+# "02. Juli 2026" / "02 Feb. 2026" / "23 März 2026"
+_MONTH_MAP = {
+    "jan": "01", "feb": "02",
+    "mar": "03", "mär": "03",
+    "apr": "04",
+    "may": "05", "mai": "05",
+    "jun": "06", "jul": "07",
+    "aug": "08", "sep": "09",
+    "oct": "10", "okt": "10",
+    "nov": "11",
+    "dec": "12", "dez": "12",
+    "januar": "01", "februar": "02", "märz": "03", "april": "04",
+    "juni": "06", "juli": "07", "august": "08", "september": "09",
+    "oktober": "10", "november": "11", "dezember": "12",
+    "january": "01", "february": "02", "march": "03",
+    "june": "06", "july": "07",
+    "october": "10", "december": "12",
+}
+_DAY_RE  = re.compile(r'^\d{1,2}$')
+_YEAR_RE = re.compile(r'^\d{4}$')
+
+
+def _normalize_named_month(v: str) -> str | None:
+    """Convert '02. Juli 2026', '2 Feb. 2026', '23 März 2026' → DD.MM.YYYY."""
+    parts = re.split(r'\s+', v.strip())
+    if len(parts) != 3:
+        return None
+    day_s, month_s, year_s = parts
+    day_s = day_s.rstrip('.')  # handle "02. Juli 2026" (German ordinal dot)
+    if not _DAY_RE.match(day_s) or not _YEAR_RE.match(year_s):
+        return None
+    key = month_s.rstrip('.').lower()
+    month_num = _MONTH_MAP.get(key) or _MONTH_MAP.get(key[:3])
+    if not month_num:
+        return None
+    return f"{int(day_s):02d}.{month_num}.{year_s}"
 
 def detect_american_dates(rows: list[dict], mapping: dict[str, str]) -> bool:
     """
@@ -122,6 +161,9 @@ def transform_date(value: str, prefer_american: bool = False) -> str | None:
     if not value or not value.strip():
         return None
     v = value.strip()
+    normalised = _normalize_named_month(v)
+    if normalised:
+        v = normalised
     formats = _DATE_FORMATS_US if prefer_american else _DATE_FORMATS_EU
     for fmt in formats:
         try:
@@ -257,6 +299,22 @@ def transform_reservation_status(value: str) -> str | None:
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+
+def transform_email(value: str) -> str:
+    """Extract first valid-looking email from multi-email or non-email strings.
+
+    - "lauingen@bvs.de, hoefer@bvs.de" → "lauingen@bvs.de"
+    - "Alexander.Kunze" (no @) → "" (validator skipped, field stays empty)
+    """
+    if not value or not value.strip():
+        return ""
+    for candidate in re.split(r"[,;]", value):
+        c = candidate.strip()
+        if _EMAIL_RE.match(c):
+            return c
+    return ""
+
+
 _VALIDATORS = {
     "email": lambda v: None if _EMAIL_RE.match(v or "") else "Ungültiges E-Mail-Format",
     "language": lambda v: None if (v and len(v.strip()) <= 2 and v.strip().isalpha()) else "Muss ISO 639-1 sein (max 2 Zeichen)",
@@ -275,6 +333,7 @@ def validate_field(validator_name: str, value: str) -> str | None:
 
 _TRANSFORMERS = {
     "date":                 transform_date,
+    "email":                transform_email,
     "country":              transform_country,
     "gender":               transform_gender,
     "title":                transform_title,

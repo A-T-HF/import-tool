@@ -20,7 +20,7 @@ from datetime import datetime
 import openpyxl
 
 from app.guests_importer import is_company_name
-from app.transformer import _STATUS_MAP, transform_country
+from app.transformer import _STATUS_MAP, transform_country, _normalize_named_month
 
 
 # ── Format signature ──────────────────────────────────────────────────────────
@@ -56,15 +56,18 @@ def _clean(v) -> str:
     return (str(v) if v is not None else "").strip()
 
 
-_BL_DATE_FMTS = ["%d.%m.%y", "%d.%m.%Y"]
+_BL_DATE_FMTS = ["%d.%m.%y", "%d.%m.%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"]
 
 def _parse_date(v) -> str | None:
-    """Parse DD.MM.YY or DD.MM.YYYY → YYYY-MM-DD."""
+    """Parse DD.MM.YY, DD.MM.YYYY, '02. Juli 2026' or ISO datetime → YYYY-MM-DD."""
     if isinstance(v, datetime):
         return v.strftime("%Y-%m-%d")
     s = _clean(v)
     if not s:
         return None
+    normalised = _normalize_named_month(s)
+    if normalised:
+        s = normalised
     for fmt in _BL_DATE_FMTS:
         try:
             return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
