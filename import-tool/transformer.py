@@ -8,7 +8,7 @@ ENTITY_TYPES = ["guest", "company", "reservation"]
 _GUEST_FIELDS = [
     {"name": "first_name",            "required": True,  "transformer": None,      "validator": None},
     {"name": "last_name",             "required": True,  "transformer": None,      "validator": None},
-    {"name": "email",                 "required": False, "transformer": None,      "validator": "email"},
+    {"name": "email",                 "required": False, "transformer": "email",   "validator": "email"},
     {"name": "phone",                 "required": False, "transformer": None,      "validator": None},
     {"name": "country",               "required": False, "transformer": "country", "validator": None},
     {"name": "region",                "required": False, "transformer": None,      "validator": None},
@@ -39,7 +39,7 @@ _COMPANY_FIELDS = [
     {"name": "code",             "required": False, "transformer": None,      "validator": "company_code"},
     {"name": "phone",            "required": False, "transformer": None,      "validator": None},
     {"name": "phone2",           "required": False, "transformer": None,      "validator": None},
-    {"name": "email",            "required": False, "transformer": None,      "validator": "email"},
+    {"name": "email",            "required": False, "transformer": "email",   "validator": "email"},
     {"name": "country",          "required": False, "transformer": "country", "validator": None},
     {"name": "city",             "required": False, "transformer": None,      "validator": None},
     {"name": "address",          "required": False, "transformer": None,      "validator": None},
@@ -59,7 +59,7 @@ _COMPANY_FIELDS = [
 _RESERVATION_FIELDS = [
     {"name": "first_name",       "required": True,  "transformer": None,                 "validator": None},
     {"name": "last_name",        "required": True,  "transformer": None,                 "validator": None},
-    {"name": "email",            "required": False, "transformer": None,                 "validator": "email"},
+    {"name": "email",            "required": False, "transformer": "email",              "validator": "email"},
     {"name": "Check In",         "required": True,  "transformer": "date",               "validator": None},
     {"name": "Check Out",        "required": True,  "transformer": "date",               "validator": None},
     {"name": "Zimmer",           "required": False, "transformer": None,                 "validator": None},
@@ -126,12 +126,14 @@ def generate_fallback_email(first_name: str, last_name: str, row_index: int) -> 
 # --- Datum ---
 _DATE_FORMATS_EU = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",  # Mews: "29.01.2026 15:00"
+    "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",  # pandas: "2026-07-02 00:00:00"
     "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y",      # EU slash before US slash
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%d.%m.%y", "%m/%d/%y",
 ]
 _DATE_FORMATS_US = [
     "%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M",
+    "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",  # pandas: "2026-07-02 00:00:00"
     "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y",      # US slash before EU slash
     "%Y-%m-%d", "%d-%m-%Y", "%Y.%m.%d",
     "%m/%d/%y", "%d.%m.%y",
@@ -171,6 +173,7 @@ def _normalize_named_month(v: str) -> str | None:
     if len(parts) != 3:
         return None
     day_s, month_s, year_s = parts
+    day_s = day_s.rstrip('.')  # handle "02. Juli 2026" (German ordinal dot)
     if not _DAY_RE.match(day_s) or not _YEAR_RE.match(year_s):
         return None
     key = month_s.rstrip('.').lower()
@@ -344,6 +347,23 @@ def transform_reservation_status(value: str) -> str | None:
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+
+def transform_email(value: str) -> str:
+    """Extract first valid-looking email from multi-email or non-email strings.
+
+    - "lauingen@bvs.de, hoefer@bvs.de" → "lauingen@bvs.de"
+    - "Alexander.Kunze" (no @) → "" (triggers fallback generation)
+    - "" → "" (triggers fallback generation)
+    """
+    if not value or not value.strip():
+        return ""
+    for candidate in re.split(r"[,;]", value):
+        c = candidate.strip()
+        if _EMAIL_RE.match(c):
+            return c
+    return ""
+
+
 _VALIDATORS = {
     "email": lambda v: None if _EMAIL_RE.match(v or "") else "Ungültiges E-Mail-Format",
     "language": lambda v: None if (v and len(v.strip()) <= 2 and v.strip().isalpha()) else "Muss ISO 639-1 sein (max 2 Zeichen)",
@@ -362,6 +382,7 @@ def validate_field(validator_name: str, value: str) -> str | None:
 
 _TRANSFORMERS = {
     "date":                 transform_date,
+    "email":                transform_email,
     "country":              transform_country,
     "gender":               transform_gender,
     "title":                transform_title,

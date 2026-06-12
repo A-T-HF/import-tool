@@ -56,7 +56,7 @@ def _clean(v) -> str:
     return (str(v) if v is not None else "").strip()
 
 
-_BL_DATE_FMTS = ["%d.%m.%y", "%d.%m.%Y"]
+_BL_DATE_FMTS = ["%d.%m.%y", "%d.%m.%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"]
 
 def _parse_date(v) -> str | None:
     """Parse DD.MM.YY, DD.MM.YYYY or '02 Juli 2026' → YYYY-MM-DD."""
