@@ -140,41 +140,44 @@ _DATE_FORMATS_US = [
 _SLASH_DATE = re.compile(r'^(\d{1,2})/(\d{1,2})/\d{2,4}$')
 
 # "02 Feb. 2026" / "23 März 2026" / "01 Mai 2026"
-_NAMED_MONTH_RE = re.compile(r'^(\d{1,2})\s+([A-Za-zÀ-ɏ]+\.?)\s+(\d{4})$')
 _MONTH_MAP = {
+    # 3-char prefixes EN + DE
     "jan": "01", "feb": "02",
-    "mar": "03", "mär": "03",   # EN + DE
+    "mar": "03", "mär": "03",
     "apr": "04",
-    "may": "05", "mai": "05",   # EN + DE
-    "jun": "06",
-    "jul": "07",
-    "aug": "08",
-    "sep": "09",
-    "oct": "10", "okt": "10",   # EN + DE
+    "may": "05", "mai": "05",
+    "jun": "06", "jul": "07",
+    "aug": "08", "sep": "09",
+    "oct": "10", "okt": "10",
     "nov": "11",
-    "dec": "12", "dez": "12",   # EN + DE
+    "dec": "12", "dez": "12",
+    # Full German month names
+    "januar": "01", "februar": "02", "märz": "03", "april": "04",
+    "juni": "06", "juli": "07", "august": "08", "september": "09",
+    "oktober": "10", "november": "11", "dezember": "12",
+    # Full English month names
+    "january": "01", "february": "02", "march": "03",
+    "june": "06", "july": "07",
+    "october": "10", "december": "12",
 }
+
+_DAY_RE  = re.compile(r'^\d{1,2}$')
+_YEAR_RE = re.compile(r'^\d{4}$')
 
 
 def _normalize_named_month(v: str) -> str | None:
-    """
-    Normalise date strings with written month names to DD.MM.YYYY.
-
-    Handles:
-      "02 Feb. 2026"  → "02.02.2026"
-      "23 März 2026"  → "23.03.2026"
-      "01 Mai 2026"   → "01.05.2026"
-      "14 Jun 2026"   → "14.06.2026"
-    """
-    m = _NAMED_MONTH_RE.match(v.strip())
-    if not m:
+    """Convert '02 Juli 2026', '2 Feb. 2026', '23 März 2026' → DD.MM.YYYY."""
+    parts = re.split(r'\s+', v.strip())
+    if len(parts) != 3:
         return None
-    day, month_raw, year = m.group(1), m.group(2), m.group(3)
-    key = month_raw.rstrip(".").lower()[:3]
-    month_num = _MONTH_MAP.get(key)
+    day_s, month_s, year_s = parts
+    if not _DAY_RE.match(day_s) or not _YEAR_RE.match(year_s):
+        return None
+    key = month_s.rstrip('.').lower()
+    month_num = _MONTH_MAP.get(key) or _MONTH_MAP.get(key[:3])
     if not month_num:
         return None
-    return f"{int(day):02d}.{month_num}.{year}"
+    return f"{int(day_s):02d}.{month_num}.{year_s}"
 
 
 def detect_american_dates(rows: list[dict], mapping: dict[str, str]) -> bool:
