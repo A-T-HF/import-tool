@@ -15,4 +15,6 @@ ENV FLASK_RUN_PORT=8080
 
 EXPOSE 8080
 
+USER nobody
+
 CMD ["flask", "run", "--port", "8080"]
